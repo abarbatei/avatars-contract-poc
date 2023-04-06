@@ -3,6 +3,7 @@ pragma solidity ^0.8.15;
 
 import { MockImplementation } from "./utils/mocks/MockImplementation.sol";
 import { MockUpgradable } from "./utils/mocks/MockUpgradable.sol";
+import { MockUpgradableV2 } from "./utils/mocks/MockUpgradableV2.sol";
 import { AvatarProxyManager } from "../contracts/solady/proxy/AvatarProxyManager.sol";
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
@@ -116,6 +117,44 @@ contract AvatarManagerTest is Test {
             _assetDataForInitializeIsCorrect(avatarContract, t);
 
         }
+    }
+
+    function testUpgradeImplementation() public {
+        MockUpgradable implementation = new MockUpgradable();
+        MockUpgradableV2 implementation2 = new MockUpgradableV2();
+
+        vm.startPrank(avatarManagerOwner);
+        avatarManager.addImplementation(address(implementation), 1);
+        avatarManager.addImplementation(address(implementation2), 2);
+        vm.stopPrank();
+        
+        TestDataForInitialize memory t;
+        t._owner = makeAddr("owner");
+        t._name = "TestContract";
+        t._someAddress = payable(makeAddr("someAddress"));
+        t._addressTwo = makeAddr("addressTwo");
+        t._someBool = true;
+        t._maxSupply = 555;
+        bytes memory initializationArguments = _encodeInitializationARguments(t);
+        
+        vm.prank(avatarManagerOwner);
+        address avatarContractAddress = avatarManager.deployCollection(1, initializationArguments);
+
+        MockUpgradable avatarContract = MockUpgradable(avatarContractAddress);
+        // assert that values are as expected before proxy change
+        _assetDataForInitializeIsCorrect(avatarContract, t);
+        
+        assertEq(MockUpgradable(avatarContractAddress).VERSION(), "V1");
+
+        vm.prank(avatarManagerOwner);
+        avatarManager.updateCollection(avatarContractAddress, 2);
+
+        // verify that the hew contract implementation is actually the new one
+        assertEq(avatarContract.VERSION(), "V2");
+
+        // assert that after the update, the proxy still holds the data, as expected
+        _assetDataForInitializeIsCorrect(avatarContract, t);
+
     }
 
     //////////////////////////// HELPER FUNCTIONS ////////////////////////////

@@ -5,9 +5,9 @@ import { OwnableUpgradeable } from "openzeppelin-upgradeable/access/OwnableUpgra
 import { ReentrancyGuardUpgradeable } from "openzeppelin-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 
-contract MockUpgradable is OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract MockUpgradableV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
-    string constant public VERSION = "V1";
+    string public constant VERSION = "V2";
 
     string public name;
     address payable public someAddress;
