@@ -157,6 +157,48 @@ contract AvatarManagerTest is Test {
 
     }
 
+    function testBulkUpgradeImplementation() public {
+        uint256 collectionCount = 10;
+        uint256 version = 1;
+
+        MockUpgradable implementation = new MockUpgradable();
+        MockUpgradableV2 implementation2 = new MockUpgradableV2();
+
+        vm.startPrank(avatarManagerOwner);
+        avatarManager.addImplementation(address(implementation), 1);
+        avatarManager.addImplementation(address(implementation2), 2);
+        vm.stopPrank();
+
+        // Create N random collections, each mapped to the same implementation and check that each has different inputs
+        for (uint256 i = 0; i < collectionCount; i++) {            
+            TestDataForInitialize memory t;
+            t._owner = vm.addr(i + 1);
+            t._name = vm.toString(i + 555);
+            t._someAddress = payable(makeAddr(vm.toString(i)));
+            t._addressTwo = makeAddr(vm.toString(i+1));
+            t._someBool = true;
+            t._maxSupply = i*100;            
+            bytes memory initializationArguments = _encodeInitializationARguments(t);
+            
+            vm.prank(avatarManagerOwner);
+            avatarManager.deployCollection(1, initializationArguments);
+        }
+
+        // sanity check that all of them have V1 initially 
+        for (uint256 i = 0; i < collectionCount; i++) {            
+            assertEq(MockUpgradable(avatarManager.proxies(i)).VERSION(), "V1");
+        }
+
+        // update all of them with version 2
+        vm.prank(avatarManagerOwner);
+        avatarManager.updateCollectionsByVersion(1, 2);
+
+        // check that all of them have the new implementation set
+        for (uint256 i = 0; i < collectionCount; i++) {            
+            assertEq(MockUpgradable(avatarManager.proxies(i)).VERSION(), "V2");
+        }
+    }
+
     //////////////////////////// HELPER FUNCTIONS ////////////////////////////
     function _encodeInitializationARguments(TestDataForInitialize memory t) internal pure returns (bytes memory initializationArguments) {
         /*
