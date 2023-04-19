@@ -66,7 +66,7 @@ contract AvatarProxyManager is Ownable2Step, Pausable {
 
     uint256 defaultImplementationVersion;
 
-    constructor() {}
+    // constructor() {}
 
     /* TODO
      - decide how to pass admin/constraints to contract
@@ -173,31 +173,6 @@ contract AvatarProxyManager is Ownable2Step, Pausable {
 
         proxyToVersion[proxy] = 0;
         emit ProxyRemoved(proxy);
-    }
-
-    //////////////////////////////// FACTORY RELATED ////////////////////////////////
-
-    /// @dev Sets the admin of the proxy.
-    /// The caller of this function must be the admin of the proxy on this factory.
-    function changeProxyAdmin(address proxy, address admin) external onlyOwner {
-        IERC1967Factory(SOLADY_ERC1967_FACTORY_ADDRESS).changeAdmin(proxy, admin);
-    }
-
-    /// @dev Upgrades the proxy to point to `implementation`.
-    /// Then, calls the proxy with abi encoded `data`.
-    /// The caller of this function must be the admin of the proxy on this factory.
-    function upgradeAndCall(address proxy, address implementation, bytes calldata data) 
-        onlyOwner
-        external 
-        payable {
-            IERC1967Factory(SOLADY_ERC1967_FACTORY_ADDRESS).upgradeAndCall(proxy, implementation, data);
-        }
-    
-    /// @dev Deploys a proxy for `implementation`, with `admin`,
-    /// and returns its address.
-    /// The value passed into this function will be forwarded to the proxy.
-    function deploy(address implementation, address admin) public payable returns (address) {        
-        return IERC1967Factory(SOLADY_ERC1967_FACTORY_ADDRESS).deploy(implementation, admin);
     }
     
     ////////////////////////////////////////////////// VIEW and HELPER functions //////////////////////////////////////////////////

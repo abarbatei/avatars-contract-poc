@@ -11,3 +11,7 @@ fs_permissions = [{ access = "read", path = "./"}]
 
 [rpc_endpoints]
 mumbai = "https://rpc.ankr.com/polygon_mumbai"
+
+
+[etherscan]
+polygon_mumbai = { key = "${ETHERSCAN_MAINNET_KEY}" }

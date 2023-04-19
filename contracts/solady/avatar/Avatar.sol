@@ -9,8 +9,7 @@ contract Avatar is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     string constant public VERSION = "V1";
 
     string public name;
-    address payable public someAddress;
-    address public addressTwo;
+    address public someAddress;
     bool public someBool;
     uint256 public maxSupply;
 
@@ -21,8 +20,7 @@ contract Avatar is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     function initialize(
         address _owner,
         string memory _name,
-        address payable _someAddress,
-        address _addressTwo,
+        address _someAddress,
         bool _someBool,
         uint256 _maxSupply
     ) public initializer {
@@ -32,7 +30,6 @@ contract Avatar is OwnableUpgradeable, ReentrancyGuardUpgradeable {
                 
         name = _name;
         someAddress = _someAddress;
-        addressTwo = _addressTwo;
         someBool = _someBool;
         maxSupply = _maxSupply;
 
