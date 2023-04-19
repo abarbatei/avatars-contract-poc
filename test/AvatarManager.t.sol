@@ -159,7 +159,6 @@ contract AvatarManagerTest is Test {
 
     function testBulkUpgradeImplementation() public {
         uint256 collectionCount = 10;
-        uint256 version = 1;
 
         MockUpgradable implementation = new MockUpgradable();
         MockUpgradableV2 implementation2 = new MockUpgradableV2();
