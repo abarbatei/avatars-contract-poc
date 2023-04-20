@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import { MockImplementation } from "./utils/mocks/MockImplementation.sol";
 import { MockUpgradable } from "./utils/mocks/MockUpgradable.sol";
 import { MockUpgradableV2 } from "./utils/mocks/MockUpgradableV2.sol";
-import { AvatarProxyManager } from "../contracts/solady/proxy/AvatarProxyManager.sol";
+import { AvatarProxyManager } from "../../contracts/solady/proxy/AvatarProxyManager.sol";
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 import { ERC1967Factory } from "solady/utils/ERC1967Factory.sol";
@@ -158,7 +158,7 @@ contract AvatarManagerTest is Test {
     }
 
     function testBulkUpgradeImplementation() public {
-        uint256 collectionCount = 10;
+        uint256 collectionCount = 10_000;
 
         MockUpgradable implementation = new MockUpgradable();
         MockUpgradableV2 implementation2 = new MockUpgradableV2();
@@ -189,8 +189,12 @@ contract AvatarManagerTest is Test {
         }
 
         // update all of them with version 2
+        uint256 checkpointGasLeft = gasleft();
         vm.prank(avatarManagerOwner);
         avatarManager.updateCollectionsByVersion(1, 2);
+
+        uint256 gasDelta = checkpointGasLeft - gasleft();
+        console.log(gasDelta, "gas for", collectionCount, "collections");
 
         // check that all of them have the new implementation set
         for (uint256 i = 0; i < collectionCount; i++) {            

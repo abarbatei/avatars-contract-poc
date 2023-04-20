@@ -1,5 +1,6 @@
 [profile.default]
-src = 'contracts/solady'
+src = 'contracts/beacon'
+test = 'test/beacon'
 out = 'out'
 libs = ['lib']
 solc_version    = '0.8.15'       # Override for the solc version (setting this ignores `auto_detect_solc`)
