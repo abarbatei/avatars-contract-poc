@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+pragma solidity ^0.8.15;
+
 import { BeaconProxy } from "openzeppelin/proxy/beacon/BeaconProxy.sol";
 import { StorageSlot } from "openzeppelin/utils/StorageSlot.sol";
 import { Address } from "openzeppelin/utils/Address.sol";
