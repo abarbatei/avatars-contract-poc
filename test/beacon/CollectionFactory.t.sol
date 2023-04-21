@@ -20,40 +20,40 @@ contract CollectionFactoryTest is Test {
         uint256 _maxSupply;
     }
 
-    CollectionFactory avatarManager;
-    address avatarManagerOwner;
+    CollectionFactory collectionFactory;
+    address collectionFactoryOwner;
     address avatarCollectionImplementation;
 
     function setUp() public {
-        avatarManagerOwner = makeAddr("avatarManagerOwner");
+        collectionFactoryOwner = makeAddr("collectionFactoryOwner");
     
-        vm.prank(avatarManagerOwner);
-        avatarManager = new CollectionFactory();
+        vm.prank(collectionFactoryOwner);
+        collectionFactory = new CollectionFactory();
 
     }
 
     function testAddImplementation() public { //withFactories {
         address implementation0 = address(new MockImplementation());
-        assertFalse(avatarManager.implementationExists(implementation0));
+        assertFalse(collectionFactory.implementationExists(implementation0));
 
         vm.expectRevert();
-        avatarManager.getImplementationVersion(implementation0);
+        collectionFactory.getImplementationVersion(implementation0);
 
-        vm.prank(avatarManagerOwner);
-        avatarManager.addImplementation(implementation0, 1);
+        vm.prank(collectionFactoryOwner);
+        collectionFactory.addImplementation(implementation0, 1);
 
-        assertEq(avatarManager.getImplementationVersion(implementation0), 1);
+        assertEq(collectionFactory.getImplementationVersion(implementation0), 1);
     }
 
     function testDeploySimpleContract() public {
         uint256 implementation0Version = 1;
         address implementation0 = address(new MockImplementation());
         
-        vm.startPrank(avatarManagerOwner);
-        avatarManager.addImplementation(implementation0, implementation0Version);
+        vm.startPrank(collectionFactoryOwner);
+        collectionFactory.addImplementation(implementation0, implementation0Version);
 
         bytes memory data = abi.encodeWithSignature("setValue(uint256,uint256)", 1, 123);
-        address avatarContract = avatarManager.deployCollection(implementation0Version, data);
+        address avatarContract = collectionFactory.deployCollection(implementation0Version, data);
         vm.stopPrank();
 
         assertEq(MockImplementation(avatarContract).getValue(1), 123);
@@ -74,9 +74,9 @@ contract CollectionFactoryTest is Test {
         
         MockUpgradable upgradableImplementation = new MockUpgradable();
         
-        vm.startPrank(avatarManagerOwner);
-        avatarManager.addImplementation(address(upgradableImplementation), upgradableImplemetationVersion);
-        address avatarContractAddress = avatarManager.deployCollection(upgradableImplemetationVersion, initializationArguments);
+        vm.startPrank(collectionFactoryOwner);
+        collectionFactory.addImplementation(address(upgradableImplementation), upgradableImplemetationVersion);
+        address avatarContractAddress = collectionFactory.deployCollection(upgradableImplemetationVersion, initializationArguments);
         vm.stopPrank();
 
         MockUpgradable avatarContract = MockUpgradable(avatarContractAddress);
@@ -89,8 +89,8 @@ contract CollectionFactoryTest is Test {
 
         MockUpgradable implementation = new MockUpgradable();
         
-        vm.prank(avatarManagerOwner);
-        avatarManager.addImplementation(address(implementation), version);
+        vm.prank(collectionFactoryOwner);
+        collectionFactory.addImplementation(address(implementation), version);
 
         // Create N random collections, each mapped to the same implementation and check that each has different inputs
         for (uint256 i = 0; i < collectionCount; i++) {            
@@ -103,8 +103,8 @@ contract CollectionFactoryTest is Test {
             t._maxSupply = i*100;            
             bytes memory initializationArguments = _encodeInitializationARguments(t);
             
-            vm.prank(avatarManagerOwner);
-            address avatarContractAddress = avatarManager.deployCollection(version, initializationArguments);
+            vm.prank(collectionFactoryOwner);
+            address avatarContractAddress = collectionFactory.deployCollection(version, initializationArguments);
 
             MockUpgradable avatarContract = MockUpgradable(avatarContractAddress);
             _assetDataForInitializeIsCorrect(avatarContract, t);
@@ -116,9 +116,9 @@ contract CollectionFactoryTest is Test {
         MockUpgradable implementation = new MockUpgradable();
         MockUpgradableV2 implementation2 = new MockUpgradableV2();
 
-        vm.startPrank(avatarManagerOwner);
-        avatarManager.addImplementation(address(implementation), 1);
-        avatarManager.addImplementation(address(implementation2), 2);
+        vm.startPrank(collectionFactoryOwner);
+        collectionFactory.addImplementation(address(implementation), 1);
+        collectionFactory.addImplementation(address(implementation2), 2);
         vm.stopPrank();
         
         TestDataForInitialize memory t;
@@ -130,8 +130,8 @@ contract CollectionFactoryTest is Test {
         t._maxSupply = 555;
         bytes memory initializationArguments = _encodeInitializationARguments(t);
         
-        vm.prank(avatarManagerOwner);
-        address avatarContractAddress = avatarManager.deployCollection(1, initializationArguments);
+        vm.prank(collectionFactoryOwner);
+        address avatarContractAddress = collectionFactory.deployCollection(1, initializationArguments);
 
         MockUpgradable avatarContract = MockUpgradable(avatarContractAddress);
         // assert that values are as expected before proxy change
@@ -139,8 +139,8 @@ contract CollectionFactoryTest is Test {
         
         assertEq(MockUpgradable(avatarContractAddress).VERSION(), "V1");
 
-        vm.prank(avatarManagerOwner);
-        avatarManager.updateCollection(avatarContractAddress, 2);
+        vm.prank(collectionFactoryOwner);
+        collectionFactory.updateCollection(avatarContractAddress, 2);
 
         // verify that the hew contract implementation is actually the new one
         assertEq(avatarContract.VERSION(), "V2");
@@ -156,9 +156,9 @@ contract CollectionFactoryTest is Test {
         MockUpgradable implementation = new MockUpgradable();
         MockUpgradableV2 implementation2 = new MockUpgradableV2();
 
-        vm.startPrank(avatarManagerOwner);
-        avatarManager.addImplementation(address(implementation), 1);
-        avatarManager.addImplementation(address(implementation2), 2);
+        vm.startPrank(collectionFactoryOwner);
+        collectionFactory.addImplementation(address(implementation), 1);
+        collectionFactory.addImplementation(address(implementation2), 2);
         vm.stopPrank();
 
         // Create N random collections, each mapped to the same implementation and check that each has different inputs
@@ -172,26 +172,26 @@ contract CollectionFactoryTest is Test {
             t._maxSupply = i*100;            
             bytes memory initializationArguments = _encodeInitializationARguments(t);
             
-            vm.prank(avatarManagerOwner);
-            avatarManager.deployCollection(1, initializationArguments);
+            vm.prank(collectionFactoryOwner);
+            collectionFactory.deployCollection(1, initializationArguments);
         }
 
         // sanity check that all of them have V1 initially 
         for (uint256 i = 0; i < collectionCount; i++) {            
-            assertEq(MockUpgradable(avatarManager.collections(i)).VERSION(), "V1");
+            assertEq(MockUpgradable(collectionFactory.collections(i)).VERSION(), "V1");
         }
 
         // update all of them with version 2
         uint256 checkpointGasLeft = gasleft();
-        vm.prank(avatarManagerOwner);
-        avatarManager.updateCollectionsByVersion(1, 2);
+        vm.prank(collectionFactoryOwner);
+        collectionFactory.updateCollectionsByVersion(1, 2);
 
         uint256 gasDelta = checkpointGasLeft - gasleft();
         console.log(gasDelta, "gas for", collectionCount, "collections");
 
         // check that all of them have the new implementation set
         for (uint256 i = 0; i < collectionCount; i++) {            
-            assertEq(MockUpgradable(avatarManager.collections(i)).VERSION(), "V2");
+            assertEq(MockUpgradable(collectionFactory.collections(i)).VERSION(), "V2");
         }
     }
 
