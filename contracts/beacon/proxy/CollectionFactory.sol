@@ -7,7 +7,7 @@ import { Pausable } from "openzeppelin/security/Pausable.sol";
 import { UpgradeableBeacon } from "openzeppelin/proxy/beacon/UpgradeableBeacon.sol";
 import { CollectionProxy } from "./CollectionProxy.sol";
 
-contract CollectionFactory is Ownable2Step, Pausable {
+contract CollectionFactoryV2 is Ownable2Step, Pausable {
 
     /**
      * @notice Event emitted when a new implementation:version mapping was added.
@@ -29,15 +29,11 @@ contract CollectionFactory is Ownable2Step, Pausable {
    /**
      * @notice Event emitted when a collection (proxy) was updated (had it's implementation change)
      * @dev emitted when updateCollection or updateCollectionsByVersion is called
-     * @param oldVersion the previous version asociated with the deployed implementation
-     * @param oldImplementation the previous implementation asociated with the proxy
-     * @param newVersion the new implementation version to be asociated with the proxy
-     * @param newImplementation the implementation that will be associated with the proxy
      * @param proxyAddress the proxy address whose implementation has changed
+     * @param newImplementation the implementation that will be associated with the proxy
+     * @param newVersion the new implementation version to be asociated with the proxy
      */
-    event CollectionUpdated(uint256 oldVersion, address oldImplementation, uint256 newVersion, address newImplementation, address proxyAddress);
-
-    uint256 public versionsCount;
+    event CollectionUpdated(address proxyAddress, address newImplementation, uint256 newVersion);
 
     uint256[] public versions;
 
@@ -45,29 +41,11 @@ contract CollectionFactory is Ownable2Step, Pausable {
 
     mapping(address => uint256) public implementationToVersion;
 
+    mapping(uint256 => address) public versionToLastestBeacon;
+
     mapping(uint256 => address[]) public versionToBeacons;
 
-    mapping(address => address) public proxyToBeacon;
-
     mapping(address => uint256) public proxyToVersion;
-
-    mapping(address => address[]) public beaconToProxies;
-
-    /////////////////////////////////////////////////////////
-
-      
-    
-    // mapping(uint256 => address[]) public versionToProxies;
-
-
-    // mapping(uint256 => address) public versionToBeacon;
-
-
-    
-    /// @dev how many proxies are refferencing this beacon
-
-
-    address[] internal freeBeacons;
 
     constructor() {
 
@@ -75,15 +53,14 @@ contract CollectionFactory is Ownable2Step, Pausable {
 
 
     function addImplementation(address implementation, uint256 version) external onlyOwner {
-        require(version != 0, "Version cannot be 0!");
-        require(versionToImplementation[version] == address(0), "Version already exists!");
-        require(implementationToVersion[implementation] == 0, "Implementation already exists!");
+        require(version != 0, "Version cannot be 0");
+        require(versionToImplementation[version] == address(0), "Version already exists");
+        require(implementationToVersion[implementation] == 0, "Implementation already exists");
 
         implementationToVersion[implementation] = version;
         versionToImplementation[version] = implementation;
 
         versions.push(version);
-        versionsCount = versions.length;
 
         emit NewImplementationAdded(implementation, version);
     }
@@ -100,8 +77,9 @@ contract CollectionFactory is Ownable2Step, Pausable {
         // if there already exists a beacon with this implementation, reuse it
         // otherwise deploy a new beacon with this implementation
         address beacon;
-        if (versionToBeacons[version].length != 0){
-            beacon = versionToBeacons[version][0];
+        address existingVersionedBeacon = versionToLastestBeacon[version];
+        if (existingVersionedBeacon != address(0)) {
+            beacon = existingVersionedBeacon;
         } else {
             beacon = _deployBeacon(implementation, version);
         }
@@ -109,17 +87,14 @@ contract CollectionFactory is Ownable2Step, Pausable {
         CollectionProxy collectionProxy = new CollectionProxy(beacon, initializationArgs);
         collection = address(collectionProxy);
         
-        proxyToBeacon[collection] = beacon;
         proxyToVersion[collection] = version;
 
-        beaconToProxies[beacon].push(collection);
-
         emit CollectionDeployed(version, beacon, collection);
-
     }
 
     function _deployBeacon(address implementation, uint256 version) internal returns (address beacon) {
             beacon = address(new UpgradeableBeacon(implementation));
+            versionToLastestBeacon[version] = beacon; 
             versionToBeacons[version].push(beacon);
     }
 
@@ -133,32 +108,15 @@ contract CollectionFactory is Ownable2Step, Pausable {
         require(currentVersion != toVersion, "proxy already at that version");
         
         address newImplementation = versionToImplementation[toVersion];
-        address currentBeacon = proxyToBeacon[proxyAddress];
-        address currentImplementation = versionToImplementation[currentVersion];
   
-        if (beaconToProxies[currentBeacon].length == 1) {
-            // if only 1 proxy is reffereing this beacon (meaning the current one), 
-            // change the implementation of the beacon to the new one
-            UpgradeableBeacon(currentBeacon).upgradeTo(newImplementation);
-        } else {
-            address newBeacon;
-            // if there is a free becon, leftover from another switch, use it
-            uint256 freeBeaconsCount = freeBeacons.length; 
-            if (freeBeaconsCount != 0) { 
-                newBeacon = freeBeacons[freeBeaconsCount - 1];
-                freeBeacons.pop();
-            } else {
-                // else create a new beacon
-                newBeacon = _deployBeacon(newImplementation, toVersion);
-            }
-            beaconToProxies[newBeacon].push(proxyAddress);
-            // make the proxy point to this new beacon
-            CollectionProxy(payable(proxyAddress)).changeBeacon(newBeacon, data); 
-        }
+        address newBeacon = _deployBeacon(newImplementation, toVersion);
+
+        // make the proxy point to this new beacon
+        CollectionProxy(payable(proxyAddress)).changeBeacon(newBeacon, data); 
 
         proxyToVersion[proxyAddress] = toVersion;
         
-        emit CollectionUpdated(currentVersion, currentImplementation, toVersion, newImplementation, proxyAddress);
+        emit CollectionUpdated(proxyAddress, newImplementation, toVersion);
     }
 
     function updateCollectionsByVersion(uint256 targetVersion, uint256 newVersion) 
@@ -167,7 +125,7 @@ contract CollectionFactory is Ownable2Step, Pausable {
         versionExists(targetVersion) 
         versionExists(newVersion) 
     {
-        require(versionToBeacons[targetVersion].length != 0, "No collections with the that version");
+        require(versionToLastestBeacon[targetVersion] != address(0), "No collections with the that version");
         _updateCollectionsByVersion(targetVersion, newVersion);
     }
 
@@ -176,7 +134,7 @@ contract CollectionFactory is Ownable2Step, Pausable {
         onlyOwner  
         versionExists(newVersion) 
     {
-        uint256 collectionCount = versionsCount; 
+        uint256 collectionCount = versions.length; 
         for (uint256 index; index < collectionCount;) {
             uint256 version = versions[index];
             _updateCollectionsByVersion(version, newVersion);
@@ -197,35 +155,21 @@ contract CollectionFactory is Ownable2Step, Pausable {
     {
         address newImplementation = versionToImplementation[newVersion];
 
-        address[] memory beacons = versionToBeacons[targetVersion];
+        address[] storage beacons = versionToBeacons[targetVersion];
 
-        address alreadyDeployedBeacon;
-        address[] memory beaconsWithNewVersion = versionToBeacons[newVersion];
-        if (beaconsWithNewVersion.length != 0) {
-            alreadyDeployedBeacon = beaconsWithNewVersion[0];
-        }
-        
         for (uint256 index; index < beacons.length; index++) {
             address beacon = beacons[index];
-            address[] memory previousBeaconsToProxy = beaconToProxies[beacon];
-            if (previousBeaconsToProxy.length == 1 && alreadyDeployedBeacon != address(0)) {
-                // if there is only 1 proxy tied to this beacon and there exists another beacon with the already existing implementation
-                // then point to it and free this one
-                // cornercase: if this is the first proxy to be changed, will change in place, even though after him others will follow
-                address proxyAddress = previousBeaconsToProxy[0];
-                delete beaconToProxies[beacon];
 
-                bytes memory data;
-                CollectionProxy(payable(proxyAddress)).changeBeacon(alreadyDeployedBeacon, data);
-                freeBeacons.push(beacon);
-                
-            } else {
-                // todo beacon to proxies here
-                UpgradeableBeacon(beacon).upgradeTo(newImplementation);
-            }
+            // upgrade beacon to point to new implementation
+            UpgradeableBeacon(beacon).upgradeTo(newImplementation);
+
+            // track this beacon in new implementation version mapping (at the end will remove them from the old version mapping)
+            versionToBeacons[newVersion].push(beacon);
         }
-    }
 
+        // all beacons were already
+        delete versionToBeacons[targetVersion];
+    }
 
     ////////////////////////////////////////////////// VIEW and HELPER functions //////////////////////////////////////////////////
 
