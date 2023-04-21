@@ -3,11 +3,10 @@ pragma solidity ^0.8.15;
 
 import { Ownable2Step } from "openzeppelin/access/Ownable2Step.sol";
 import { Pausable } from "openzeppelin/security/Pausable.sol";
-// import { BeaconProxy } from "openzeppelin/proxy/beacon/BeaconProxy.sol";
 import { UpgradeableBeacon } from "openzeppelin/proxy/beacon/UpgradeableBeacon.sol";
 import { CollectionProxy } from "./CollectionProxy.sol";
 
-contract CollectionFactoryV2 is Ownable2Step, Pausable {
+contract CollectionFactory is Ownable2Step, Pausable {
 
     /**
      * @notice Event emitted when a new implementation:version mapping was added.
@@ -28,14 +27,23 @@ contract CollectionFactoryV2 is Ownable2Step, Pausable {
 
    /**
      * @notice Event emitted when a collection (proxy) was updated (had it's implementation change)
-     * @dev emitted when updateCollection or updateCollectionsByVersion is called
+     * @dev emitted when updateCollection is called
      * @param proxyAddress the proxy address whose implementation has changed
      * @param newImplementation the implementation that will be associated with the proxy
      * @param newVersion the new implementation version to be asociated with the proxy
      */
     event CollectionUpdated(address proxyAddress, address newImplementation, uint256 newVersion);
 
+   /**
+     * @notice Event emitted when a bulk collection update was done (had it's implementation change)
+     * @dev emitted when updateCollectionsByVersion or updateAllCollections is called
+     * @param fromVersion the implementation version that is targeted for update
+     * @param toVersion the new implementation version to be asociated with the proxy
+     */
+    event CollectionsBulkUpdated(uint256 fromVersion, uint256 toVersion);
+
     uint256[] public versions;
+    address[] public collections;
 
     mapping(uint256 => address) public versionToImplementation;
 
@@ -88,22 +96,17 @@ contract CollectionFactoryV2 is Ownable2Step, Pausable {
         collection = address(collectionProxy);
         
         proxyToVersion[collection] = version;
+        collections.push(collection);
 
         emit CollectionDeployed(version, beacon, collection);
     }
 
-    function _deployBeacon(address implementation, uint256 version) internal returns (address beacon) {
-            beacon = address(new UpgradeableBeacon(implementation));
-            versionToLastestBeacon[version] = beacon; 
-            versionToBeacons[version].push(beacon);
-    }
-
-    function updateCollection(address proxyAddress, uint256 toVersion, bytes memory data) 
+    function updateCollection(address proxyAddress, uint256 toVersion) 
         external 
         onlyOwner 
         versionExists(toVersion) 
     {
-
+        bytes memory data;
         uint256 currentVersion = proxyToVersion[proxyAddress];
         require(currentVersion != toVersion, "proxy already at that version");
         
@@ -119,16 +122,6 @@ contract CollectionFactoryV2 is Ownable2Step, Pausable {
         emit CollectionUpdated(proxyAddress, newImplementation, toVersion);
     }
 
-    function updateCollectionsByVersion(uint256 targetVersion, uint256 newVersion) 
-        external 
-        onlyOwner 
-        versionExists(targetVersion) 
-        versionExists(newVersion) 
-    {
-        require(versionToLastestBeacon[targetVersion] != address(0), "No collections with the that version");
-        _updateCollectionsByVersion(targetVersion, newVersion);
-    }
-
     function updateAllCollections(uint256 newVersion) 
         external 
         onlyOwner  
@@ -142,6 +135,22 @@ contract CollectionFactoryV2 is Ownable2Step, Pausable {
                 ++index;
             }
         }
+    }
+
+    function updateCollectionsByVersion(uint256 targetVersion, uint256 newVersion) 
+        external 
+        onlyOwner 
+        versionExists(targetVersion) 
+        versionExists(newVersion) 
+    {
+        require(versionToLastestBeacon[targetVersion] != address(0), "No collections with the that version");
+        _updateCollectionsByVersion(targetVersion, newVersion);
+    }
+
+    function _deployBeacon(address implementation, uint256 version) internal returns (address beacon) {
+            beacon = address(new UpgradeableBeacon(implementation));
+            versionToLastestBeacon[version] = beacon; 
+            versionToBeacons[version].push(beacon);
     }
 
     /**
@@ -169,6 +178,8 @@ contract CollectionFactoryV2 is Ownable2Step, Pausable {
 
         // all beacons were already
         delete versionToBeacons[targetVersion];
+
+        emit CollectionsBulkUpdated(targetVersion, newVersion);
     }
 
     ////////////////////////////////////////////////// VIEW and HELPER functions //////////////////////////////////////////////////
