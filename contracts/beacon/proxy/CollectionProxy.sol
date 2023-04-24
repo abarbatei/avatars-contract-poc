@@ -13,7 +13,17 @@ contract CollectionProxy is BeaconProxy {
     }
 
     /**
-     * @dev any function from implementation address with a  signature hash colistion of f8ab7198 will reroute to here and cannot be executed 
+     * @dev any function from implementation address with a signature hash colistion of 59659e90 will reroute to here and cannot be executed 
+     * Sighash   |   Function Signature
+     * ========================  
+     * 59659e90  =>  beacon()  
+     */
+    function beacon() external view returns (address){
+        return _beacon();
+    }
+    
+    /**
+     * @dev any function from implementation address with a signature hash colistion of f8ab7198 will reroute to here and cannot be executed 
      * Sighash   |   Function Signature
      * =========================================  
      * f8ab7198  =>  changeBeacon(address,bytes)   
