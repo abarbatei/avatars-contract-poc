@@ -5,10 +5,11 @@ import { OwnableUpgradeable } from "openzeppelin-upgradeable/access/OwnableUpgra
 import { ReentrancyGuardUpgradeable } from "openzeppelin-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { AccessControlUpgradeable } from "openzeppelin-upgradeable/access/AccessControlUpgradeable.sol";
 import { ERC721EnumerableUpgradeable } from "openzeppelin-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import { UpdatableOperatorFiltererUpgradeable } from "operator-filter-registry/upgradeable/UpdatableOperatorFiltererUpgradeable.sol";
 
 
 
-contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ERC721EnumerableUpgradeable, ReentrancyGuardUpgradeable {
+contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ERC721EnumerableUpgradeable, ReentrancyGuardUpgradeable, UpdatableOperatorFiltererUpgradeable {
 
     /**
      * @notice Event emitted when the contract was initialized.
@@ -43,7 +44,20 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ERC721Enumerabl
      */
     event BaseURISet(string baseURI);
 
+    /// @notice max token supply
+    uint256 public maxSupply;
     string public baseTokenURI;
+    address public allowedToExecuteMint;
+    address public sandOwner;
+    address public signAddress;
+
+    bytes32 public constant ADMIN = keccak256("ADMIN");
+    bytes32 public constant CONFIGURATOR = keccak256("CONFIGURATOR");
+    bytes32 public constant TRANSFORMER = keccak256("TRANSFORMER");
+
+    /*//////////////////////////////////////////////////////////////
+                           Constructor / Initializers
+    //////////////////////////////////////////////////////////////*/
 
     constructor() {
         _disableInitializers();
@@ -62,9 +76,9 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ERC721Enumerabl
         bool _operatorFiltererSubscriptionSubscribe,
         uint256 _maxSupply) internal onlyInitializing {
 
-        require(bytes(_initialBaseURI).length != 0, "BaseURI is not set");
-        require(bytes(_name).length != 0, "Name cannot be empty");
-        require(bytes(_symbol).length != 0, "Symbol cannot be empty");
+        require(_initialBaseURI.length != 0, "BaseURI is not set");
+        require(_name.length != 0, "Name cannot be empty");
+        require(_symbol.length != 0, "Symbol cannot be empty");
         require(_signAddress != address(0x0), "Sign address is zero address");
         require(_trustedForwarder != address(0x0), "Trusted forwarder is zero address");
         require(_sandOwner != address(0x0), "Sand owner is zero address");
@@ -72,44 +86,145 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ERC721Enumerabl
 
         baseTokenURI = _initialBaseURI;
 
-
-        __ERC721_init(_name, _symbol);
         // __ERC2771Handler_initialize(_trustedForwarder);
-        __Ownable_init_unchained();
+        __ERC721_init(_name, _symbol);
         __ReentrancyGuard_init();
-        // __UpdatableOperatorFiltererUpgradeable_init(
-        //     _registry,
-        //     _operatorFiltererSubscription,
-        //     _operatorFiltererSubscriptionSubscribe
-        // );
         __AccessControl_init_unchained();
 
-        // sandOwner = _sandOwner;
-        // signAddress = _signAddress;
-        // maxSupply = _maxSupply;
-
-        // emit ContractInitialized(
-        //     baseURI,
-        //     _name,
-        //     _symbol,
-        //     _sandOwner,
-        //     _signAddress,
-        //     _maxSupply,
-        //     _registry,
-        //     _operatorFiltererSubscription,
-        //     _operatorFiltererSubscriptionSubscribe
-        // );
-
-
         // CollectionFactory is the owner and made the call, need to change it to the designated owner
-        transferOwnership(_collectionOwner);
+        // call to __Ownable_init_unchained() is not helpfull as we want to set owner to a specific address, not msg.sender
+        transferOwnership(_collectionOwner); // also checks for "new owner is the zero address"
+
+        __UpdatableOperatorFiltererUpgradeable_init(
+            _registry,
+            _operatorFiltererSubscription,
+            _operatorFiltererSubscriptionSubscribe
+        );
+
+        sandOwner = _sandOwner;
+        signAddress = _signAddress;
+        maxSupply = _maxSupply;
+
+        // grants the collection owner the ADMIN role
+        _grantRole(ADMIN, _collectionOwner);
+        
+        // makes ADMIN role holders be able to modify/configure the other rols
+        _setRoleAdmin(CONFIGURATOR, ADMIN);
+        _setRoleAdmin(TRANSFORMER, ADMIN);
+
+        emit ContractInitialized(
+            baseURI,
+            _name,
+            _symbol,
+            _sandOwner,
+            _signAddress,
+            _maxSupply,
+            _registry,
+            _operatorFiltererSubscription,
+            _operatorFiltererSubscriptionSubscribe
+        );
     }
+
+    function initialize(
+        address _collectionOwner,
+        string memory _initialBaseURI,
+        string memory _name,
+        string memory _symbol,
+        address payable _sandOwner,
+        address _signAddress,
+        address _trustedForwarder,
+        address _registry,
+        address _operatorFiltererSubscription,
+        bool _operatorFiltererSubscriptionSubscribe,
+        uint256 _maxSupply
+    ) external virtual initializer {
+        __AvatarCollection_init(
+            _collectionOwner,
+            _initialBaseURI,
+            _name,
+            _symbol,
+            _sandOwner,
+            _signAddress,
+            _trustedForwarder,
+            _registry,
+            _operatorFiltererSubscription,
+            _operatorFiltererSubscriptionSubscribe,
+            _maxSupply
+        );
+    }
+
+
+    /*//////////////////////////////////////////////////////////////
+                    External and public functions
+    //////////////////////////////////////////////////////////////*/
+
 
     function setBaseURI(string memory baseURI) public onlyOwner {
         require(bytes(baseURI).length != 0, "baseURI is not set");
         baseTokenURI = baseURI;
         emit BaseURISet(baseURI);
     }
+
+
+        /**
+     * @dev See OpenZeppelin {IERC721-setApprovalForAll}
+     */
+    function setApprovalForAll(address operator, bool approved)
+        public
+        override(ERC721Upgradeable, IERC721Upgradeable)
+        onlyAllowedOperatorApproval(operator)
+    {
+        super.setApprovalForAll(operator, approved);
+    }
+
+    /**
+     * @dev See OpenZeppelin {IERC721-approve}
+     */
+    function approve(address operator, uint256 tokenId)
+        public
+        override(ERC721Upgradeable, IERC721Upgradeable)
+        onlyAllowedOperatorApproval(operator)
+    {
+        super.approve(operator, tokenId);
+    }
+
+    /**
+     * @dev See OpenZeppelin {IERC721-transferFrom}
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public override(ERC721Upgradeable, IERC721Upgradeable) onlyAllowedOperator(from) {
+        super.transferFrom(from, to, tokenId);
+    }
+
+    /**
+     * @dev See OpenZeppelin {IERC721-safeTransferFrom}
+     */
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public override(ERC721Upgradeable, IERC721Upgradeable) onlyAllowedOperator(from) {
+        super.safeTransferFrom(from, to, tokenId);
+    }
+
+    /**
+     * @dev See OpenZeppelin {IERC721-safeTransferFrom}
+     */
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory data
+    ) public override(ERC721Upgradeable, IERC721Upgradeable) onlyAllowedOperator(from) {
+        super.safeTransferFrom(from, to, tokenId, data);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                           View functions
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice get base TokenURI
@@ -127,30 +242,4 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ERC721Enumerabl
         return super.supportsInterface(interfaceId);
     }
 
-    function initialize(
-        string memory _initialBaseURI,
-        string memory _name,
-        string memory _symbol,
-        address payable _sandOwner,
-        address _signAddress,
-        address _trustedForwarder,
-        address _registry,
-        address _operatorFiltererSubscription,
-        bool _operatorFiltererSubscriptionSubscribe,
-        uint256 _maxSupply
-    ) external virtual initializer {
-        __AvatarCollection_init(
-            msg.sender,
-            _initialBaseURI,
-            _name,
-            _symbol,
-            _sandOwner,
-            _signAddress,
-            _trustedForwarder,
-            _registry,
-            _operatorFiltererSubscription,
-            _operatorFiltererSubscriptionSubscribe,
-            _maxSupply
-        );
-    }
 }
