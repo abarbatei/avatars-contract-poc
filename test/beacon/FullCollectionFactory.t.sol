@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import { MockImplementation } from "./utils/mocks/MockImplementation.sol";
 import { MockUpgradable } from "./utils/mocks/MockUpgradable.sol";
 import { MockUpgradableV2 } from "./utils/mocks/MockUpgradableV2.sol";
-import { CollectionFactory } from "../../contracts/beacon/proxy/CollectionFactory.sol";
+import { CollectionFactory } from "../../contracts/beacon/proxy/FullCollectionFactory.sol";
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 
