@@ -2,6 +2,4 @@ forge-std/=lib/forge-std/src/
 proxy-factory/=lib/proxy-factory/contracts/
 openzeppelin/=lib/openzeppelin-contracts/contracts/
 openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
-
-
 solady/=lib/solady/src/
