@@ -107,6 +107,7 @@ contract CollectionFactory is Ownable2Step {
 
     /**
      * @notice adds, an already deployed beacon, to be tracked/used by the factory
+     *         beacon ownershi must be transfered to this contract beforehand
      * @dev checks that implementation is actually a contract and not already added
      * @custom:event BeaconAdded
      * @param beacon the beacon address to be added/tracked
@@ -117,6 +118,7 @@ contract CollectionFactory is Ownable2Step {
     {
         require(!beaconState[beacon], "CollectionFactory: beacon already added");
         require(Address.isContract(beacon), "CollectionFactory: beacon is not a contract");
+        require(UpgradeableBeacon(beacon).owner() == address(this), "CollectionFactory: ownership must be given to factory");
         _saveBeacon(beacon);
     }
 
@@ -156,10 +158,10 @@ contract CollectionFactory is Ownable2Step {
      *                   the newly update collection. If not provieded, will not call any function
      */
     function updateCollection(address collection, address beacon, bytes memory updateArgs) 
-        external 
-        onlyOwners(collection)
-        collectionExists(collection)
+        external
         beaconIsAvailable(beacon)
+        collectionExists(collection)
+        onlyOwners(collection)
     {
         CollectionProxy(payable(collection)).changeBeacon(beacon, updateArgs); 
         collectionToBeacon[collection] = beacon;
@@ -179,12 +181,11 @@ contract CollectionFactory is Ownable2Step {
         onlyOwner 
         beaconIsAvailable(beacon)
     {
-        UpgradeableBeacon(beacon).upgradeTo(implementation);
+        UpgradeableBeacon(beacon).upgradeTo(implementation);        
     }
 
     /** 
-     * @notice Helper function that retrieves all implementations tracked by the factory;
-     *         can also be done off-chain
+     * @notice Helper function that retrieves all implementations tracked by the factory
      * @return list of implementation addresses used by the proxy
      */
     function getImplementations() 
@@ -199,6 +200,40 @@ contract CollectionFactory is Ownable2Step {
             implementations[index] = beacon.implementation();
         }
         return implementations;
+    }
+
+    /** 
+     * @notice Helper function that retrieves all beacons tracked by the factory
+     * @return list of beacons used by the proxy
+     */
+    function getBeacons() 
+        external 
+        view 
+        returns (address[] memory)
+    {
+        uint256 beaconCount = beacons.length;
+        address [] memory beacons_ = new address[](beaconCount);
+        for (uint256 index = 0; index < beaconCount; index++) {
+            beacons_[index] = beacons[index];
+        }
+        return beacons_;
+    }
+
+    /** 
+     * @notice Helper function that retrieves all collections tracked by the factory
+     * @return list of collections managed by the proxy
+     */
+    function getCollections() 
+        external 
+        view 
+        returns (address[] memory)
+    {
+        uint256 collectionsCount = collections.length;
+        address [] memory collections_ = new address[](collectionsCount);
+        for (uint256 index = 0; index < collectionsCount; index++) {
+            collections_[index] = collections[index];
+        }
+        return collections_;
     }
 
     /** 
