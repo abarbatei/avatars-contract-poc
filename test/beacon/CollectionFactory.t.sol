@@ -64,6 +64,9 @@ contract CollectionFactoryTest is Test {
         vm.prank(collectionFactoryOwner);
         address deployedBeacon = collectionFactory.deployBeacon(implementation);
 
+        address savedImplementation = UpgradeableBeacon(deployedBeacon).implementation();
+        assertEq(savedImplementation, implementation);
+
         address savedBeacon = collectionFactory.beacons(0);
         assertEq(deployedBeacon, savedBeacon);
 
@@ -345,6 +348,67 @@ contract CollectionFactoryTest is Test {
             - respects onther invariants            
         TODO
     */
+
+    function test_updateBeaconImplementation_revertsIfNotFactoryOwner() public {
+        
+        vm.prank(collectionFactoryOwner);
+        address deployedBeacon = collectionFactory.deployBeacon(implementation);
+
+        vm.expectRevert();
+        vm.prank(alice);
+        collectionFactory.updateBeaconImplementation(deployedBeacon, implementation2);
+    }
+
+    function test_updateBeaconImplementation_succesful() public {
+        
+        vm.startPrank(collectionFactoryOwner);
+        address deployedBeacon = collectionFactory.deployBeacon(implementation);
+
+        collectionFactory.updateBeaconImplementation(deployedBeacon, implementation2);
+
+        address secondImplementation = UpgradeableBeacon(deployedBeacon).implementation();
+
+        assertEq(implementation2, secondImplementation, "updated beacon implementation should be the passed one");
+        vm.stopPrank();
+    }
+
+    function test_updateBeaconImplementation_inputValidationWorks() public {
+
+        vm.startPrank(collectionFactoryOwner);
+
+        vm.expectRevert("CollectionFactory: beacon is not tracked");
+        collectionFactory.updateBeaconImplementation(alice, implementation2);
+
+        vm.stopPrank();
+
+    }
+
+    function test_updateBeaconImplementation_respectsOtherInvariants() public {
+
+        bytes memory updateArgs;
+
+        vm.startPrank(collectionFactoryOwner);
+        address deployedBeacon = collectionFactory.deployBeacon(implementation);
+
+        address[] memory beforeCollections = collectionFactory.getCollections();
+        assertEq(beforeCollections.length, 0);
+
+        address[] memory beforeBeacons = collectionFactory.getBeacons();
+        assertEq(beforeBeacons.length, 1);
+
+        collectionFactory.updateBeaconImplementation(deployedBeacon, implementation2);
+
+        address[] memory afterCollections = collectionFactory.getCollections();
+        assertEq(beforeCollections.length, afterCollections.length);
+
+        address[] memory afterBeacons = collectionFactory.getBeacons();
+        assertEq(beforeBeacons.length, afterBeacons.length);
+        assertEq(beforeBeacons[0], afterBeacons[0]);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            Helper functions
+    //////////////////////////////////////////////////////////////*/
 
     function _defaultArgsData() public returns (bytes memory initializationArguments) {
         TestDataForInitialize memory t;
