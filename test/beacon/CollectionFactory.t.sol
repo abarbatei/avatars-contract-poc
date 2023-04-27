@@ -435,4 +435,17 @@ contract CollectionFactoryTest is Test {
             "initialize(address,string,address,address,bool,uint256)",
             t._owner, t._name, t._someAddress, t._addressTwo, t._someBool, t._maxSupply);
     }
+
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    bytes32 public constant CONFIGURATOR_ROLE = keccak256("CONFIGURATOR_ROLE");
+    bytes32 public constant TRANSFORMER_ROLE = keccak256("TRANSFORMER_ROLE");
+
+    function test_odd() public {
+        console.log("ADMIN_ROLE");
+        console.logBytes32(ADMIN_ROLE);
+        console.log("CONFIGURATOR_ROLE");
+        console.logBytes32(CONFIGURATOR_ROLE);
+        console.log("TRANSFORMER_ROLE");
+        console.logBytes32(TRANSFORMER_ROLE);
+    }
 }

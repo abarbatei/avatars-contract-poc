@@ -4,11 +4,17 @@ pragma solidity ^0.8.15;
 import { OwnableUpgradeable } from "openzeppelin-upgradeable/access/OwnableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "openzeppelin-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { AccessControlUpgradeable } from "openzeppelin-upgradeable/access/AccessControlUpgradeable.sol";
-import { ERC721EnumerableUpgradeable, ERC721Upgradeable, IERC721Upgradeable } from "openzeppelin-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 // import { UpdatableOperatorFiltererUpgradeable } from "operator-filter-registry/upgradeable/UpdatableOperatorFiltererUpgradeable.sol";
+import { CollectionAccessControlRules } from "./CollectionAccessControlRules.sol";
+import { CollectionStateManagement } from "./CollectionStateManagement.sol";
+import { 
+    ERC721BurningMemoryEnumerableUpgradeable, 
+    ERC721EnumerableUpgradeable, 
+    ERC721Upgradeable, 
+    IERC721Upgradeable 
+    } from "./ERC721BurningMemoryEnumerableUpgradeable.sol";
 
-
-contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ReentrancyGuardUpgradeable, ERC721EnumerableUpgradeable
+contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC721BurningMemoryEnumerableUpgradeable, CollectionStateManagement
     //  , UpdatableOperatorFiltererUpgradeable 
     {
 
@@ -56,10 +62,15 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ReentrancyGuard
     bytes32 public constant CONFIGURATOR = keccak256("CONFIGURATOR");
     bytes32 public constant TRANSFORMER = keccak256("TRANSFORMER");
 
+
     /*//////////////////////////////////////////////////////////////
                            Constructor / Initializers
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @notice mitigate a possible Implementation contract takeover, as indicate by
+     *         https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable#initializing_the_implementation_contract
+     */
     constructor() {
         _disableInitializers();
     }
@@ -89,12 +100,9 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ReentrancyGuard
 
         // __ERC2771Handler_initialize(_trustedForwarder);
         __ERC721_init(_name, _symbol);
-        __ReentrancyGuard_init();
-        __AccessControl_init_unchained();
+        __ReentrancyGuard_init();        
 
-        // CollectionFactory is the owner and made the call, need to change it to the designated owner
-        // call to __Ownable_init_unchained() is not helpfull as we want to set owner to a specific address, not msg.sender
-        transferOwnership(_collectionOwner); // also checks for "new owner is the zero address"
+        __InitializeAccessControl(_collectionOwner);
 
         // __UpdatableOperatorFiltererUpgradeable_init(
         //     _registry,
@@ -106,12 +114,6 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ReentrancyGuard
         signAddress = _signAddress;
         maxSupply = _maxSupply;
 
-        // grants the collection owner the ADMIN role
-        _grantRole(ADMIN, _collectionOwner);
-        
-        // makes ADMIN role holders be able to modify/configure the other rols
-        _setRoleAdmin(CONFIGURATOR, ADMIN);
-        _setRoleAdmin(TRANSFORMER, ADMIN);
 
         emit ContractInitialized(
             _initialBaseURI,
@@ -159,14 +161,20 @@ contract Avatar is OwnableUpgradeable, AccessControlUpgradeable, ReentrancyGuard
                     External and public functions
     //////////////////////////////////////////////////////////////*/
 
-
-    function setBaseURI(string memory baseURI) public onlyOwner {
-        require(bytes(baseURI).length != 0, "baseURI is not set");
+    function setBaseURI(string memory baseURI) public authorizedRole(CONFIGURATOR) {
+        require(bytes(baseURI).length != 0, "Avatar: baseURI is not set");
         baseTokenURI = baseURI;
         emit BaseURISet(baseURI);
     }
 
-    
+    function changeState(State state) 
+        public 
+        override         
+        authorizedRole(CONFIGURATOR)
+    {
+        super.changeState(state);
+    }
+
     // /**
     //  * @dev See OpenZeppelin {IERC721-setApprovalForAll}
     //  */
