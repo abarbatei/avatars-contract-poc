@@ -3,19 +3,22 @@ pragma solidity ^0.8.15;
 
 import { OwnableUpgradeable } from "openzeppelin-upgradeable/access/OwnableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "openzeppelin-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import { AccessControlUpgradeable } from "openzeppelin-upgradeable/access/AccessControlUpgradeable.sol";
+import { AccessControlUpgradeable, ContextUpgradeable } from "openzeppelin-upgradeable/access/AccessControlUpgradeable.sol";
 // import { UpdatableOperatorFiltererUpgradeable } from "operator-filter-registry/upgradeable/UpdatableOperatorFiltererUpgradeable.sol";
 import { CollectionAccessControlRules } from "./CollectionAccessControlRules.sol";
 import { CollectionStateManagement } from "./CollectionStateManagement.sol";
+
+import { ERC2771HandlerUpgradeable } from "./ERC2771HandlerUpgradeable.sol";
+
 import { 
-    ERC721BurningMemoryEnumerableUpgradeable, 
+    ERC721BurnMemoryEnumerableUpgradeable, 
     ERC721EnumerableUpgradeable, 
     ERC721Upgradeable, 
     IERC721Upgradeable 
-    } from "./ERC721BurningMemoryEnumerableUpgradeable.sol";
+    } from "./ERC721BurnMemoryEnumerableUpgradeable.sol";
 
-contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC721BurningMemoryEnumerableUpgradeable, CollectionStateManagement
-    //  , UpdatableOperatorFiltererUpgradeable 
+contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC721BurnMemoryEnumerableUpgradeable, CollectionStateManagement, ERC2771HandlerUpgradeable
+// , UpdatableOperatorFiltererUpgradeable 
     {
 
     /**
@@ -82,7 +85,7 @@ contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC
         string memory _symbol,
         address payable _sandOwner,
         address _signAddress,
-        address _trustedForwarder,
+        address _initialTrustedForwarder,
         address _registry,
         address _operatorFiltererSubscription,
         bool _operatorFiltererSubscriptionSubscribe,
@@ -92,13 +95,13 @@ contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC
         require(bytes(_name).length != 0, "Name cannot be empty");
         require(bytes(_symbol).length != 0, "Symbol cannot be empty");
         require(_signAddress != address(0x0), "Sign address is zero address");
-        require(_trustedForwarder != address(0x0), "Trusted forwarder is zero address");
+        require(_initialTrustedForwarder != address(0x0), "Trusted forwarder is zero address");
         require(_sandOwner != address(0x0), "Sand owner is zero address");
         require(_maxSupply > 0, "Max supply should be more than 0");
 
         baseTokenURI = _initialBaseURI;
 
-        // __ERC2771Handler_initialize(_trustedForwarder);
+        __ERC2771Handler_initialize(_initialTrustedForwarder);
         __ERC721_init(_name, _symbol);
         __ReentrancyGuard_init();        
 
@@ -135,7 +138,7 @@ contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC
         string memory _symbol,
         address payable _sandOwner,
         address _signAddress,
-        address _trustedForwarder,
+        address _initialTrustedForwarder,
         address _registry,
         address _operatorFiltererSubscription,
         bool _operatorFiltererSubscriptionSubscribe,
@@ -148,7 +151,7 @@ contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC
             _symbol,
             _sandOwner,
             _signAddress,
-            _trustedForwarder,
+            _initialTrustedForwarder,
             _registry,
             _operatorFiltererSubscription,
             _operatorFiltererSubscriptionSubscribe,
@@ -173,6 +176,29 @@ contract Avatar is CollectionAccessControlRules, ReentrancyGuardUpgradeable, ERC
         authorizedRole(CONFIGURATOR)
     {
         super.changeState(state);
+    }
+
+    /**
+     * @notice ERC2771 compatible msg.data getter
+     * @dev returns ERC2771HandlerUpgradeable._msgData()
+     * @return msg.data
+     */
+    function _msgData() internal view override(ContextUpgradeable, ERC2771HandlerUpgradeable) returns (bytes calldata) {
+        return ERC2771HandlerUpgradeable._msgData();
+    }
+
+    /**
+     * @notice ERC2771 compatible msg.sender getter
+     * @dev returns ERC2771HandlerUpgradeable._msgSender()
+     * @return sender msg.sender
+     */
+    function _msgSender()
+        internal
+        view
+        override(ContextUpgradeable, ERC2771HandlerUpgradeable)
+        returns (address sender)
+    {
+        return ERC2771HandlerUpgradeable._msgSender();
     }
 
     // /**

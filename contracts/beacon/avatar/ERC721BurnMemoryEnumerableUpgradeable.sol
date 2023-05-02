@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import { ERC721EnumerableUpgradeable, ERC721Upgradeable, IERC721Upgradeable } from "openzeppelin-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
-contract ERC721BurningMemoryEnumerableUpgradeable is ERC721EnumerableUpgradeable {
+contract ERC721BurnMemoryEnumerableUpgradeable is ERC721EnumerableUpgradeable {
 
     /*//////////////////////////////////////////////////////////////
                            Global state variables
