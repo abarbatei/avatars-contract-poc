@@ -13,16 +13,17 @@ import { EnumerableMap } from "./EnumerableMap.sol";
 contract CollectionFactory is Ownable2Step {
 
     using EnumerableSet for EnumerableSet.AddressSet;
+    // using EnumerableSet for EnumerableSet.Bytes32Set;
 
     /*//////////////////////////////////////////////////////////////
                            Global state variables
     //////////////////////////////////////////////////////////////*/        
 
     /// @notice list of tracked beacon adresses    
-    string[] public aliases;
+    bytes32[] public aliases;
     
     /// @notice mapping alias to beacon address
-    mapping(string => address) public aliasToBeacon;
+    mapping(bytes32 => address) public aliasToBeacon;
 
     /// @notice beacon/alias count; used as a helper for off-chain operations mostly
     uint256 public beaconCount;
@@ -40,10 +41,10 @@ contract CollectionFactory is Ownable2Step {
     /**
      * @notice Event emitted when a beacon was marked as followed by the factory
      * @dev emitted when deployBeacon or addBeacon is called
-     * @param beaconAlias the alias (string) used for this beacon
+     * @param beaconAlias the alias (bytes32) used for this beacon
      * @param beaconAddress the marked beacon address
      */
-    event BeaconAdded(string indexed beaconAlias, address indexed beaconAddress);
+    event BeaconAdded(bytes32 indexed beaconAlias, address indexed beaconAddress);
 
     /**
      * @notice Event emitted when a collection (proxy) was deployed
@@ -52,7 +53,7 @@ contract CollectionFactory is Ownable2Step {
      * @param beaconAddress the used beacon address for the collection
      * @param collectionProxy the new collection proxy address
      */
-    event CollectionDeployed(string indexed beaconAlias, address indexed beaconAddress, address indexed collectionProxy);
+    event CollectionDeployed(bytes32 indexed beaconAlias, address indexed beaconAddress, address indexed collectionProxy);
 
    /**
      * @notice Event emitted when a collection (proxy) was updated (had it's implementation change)
@@ -61,7 +62,7 @@ contract CollectionFactory is Ownable2Step {
      * @param beaconAlias the alias for the used beacon
      * @param beaconAddress the new beacon address that is used
      */
-    event CollectionUpdated(address indexed proxyAddress, string indexed beaconAlias, address indexed beaconAddress);
+    event CollectionUpdated(address indexed proxyAddress, bytes32 indexed beaconAlias, address indexed beaconAddress);
 
     /*//////////////////////////////////////////////////////////////
                                 Modifiers
@@ -71,7 +72,7 @@ contract CollectionFactory is Ownable2Step {
      * @notice Modifier used to check if a beacon is actually tracked by factory
      * @param beaconAlias the beacon address to check
      */
-    modifier beaconIsAvailable(string memory beaconAlias) {
+    modifier beaconIsAvailable(bytes32 beaconAlias) {
         require(aliasToBeacon[beaconAlias] != address(0x0), "CollectionFactory: beacon is not tracked");
         _;
     }
@@ -106,12 +107,12 @@ contract CollectionFactory is Ownable2Step {
      * @param beaconAlias the beacon alias to be attributed to the newly deployed beacon
      * @return beacon the newly added beacon address that was launched
      */
-    function deployBeacon(address implementation, string memory beaconAlias) 
+    function deployBeacon(address implementation, bytes32 beaconAlias) 
         external 
         onlyOwner
         returns (address beacon)
     {
-        require(bytes(beaconAlias).length != 0, "CollectionFactory: beacon alias cannot be empty");
+        require(beaconAlias != 0, "CollectionFactory: beacon alias cannot be empty");
         require(aliasToBeacon[beaconAlias] == address(0x0), "CollectionFactory: beacon already added");        
         beacon = address(new UpgradeableBeacon(implementation));
         _saveBeacon(beacon, beaconAlias);
@@ -126,11 +127,11 @@ contract CollectionFactory is Ownable2Step {
      * @param beacon the beacon address to be added/tracked
      * @param beaconAlias the beacon address to be added/tracked
      */
-    function addBeacon(address beacon, string memory beaconAlias) 
+    function addBeacon(address beacon, bytes32 beaconAlias) 
         external 
         onlyOwner 
     {
-        require(bytes(beaconAlias).length != 0, "CollectionFactory: beacon alias cannot be empty");
+        require(beaconAlias != 0, "CollectionFactory: beacon alias cannot be empty");
         require(aliasToBeacon[beaconAlias] == address(0x0), "CollectionFactory: beacon already added");
         require(Address.isContract(beacon), "CollectionFactory: beacon is not a contract");
         require(UpgradeableBeacon(beacon).owner() == address(this), "CollectionFactory: ownership must be given to factory");
@@ -148,7 +149,7 @@ contract CollectionFactory is Ownable2Step {
      *                           will not call any function
      * @return collection the newly created collection address
      */
-    function deployCollection(string memory beaconAlias, bytes calldata initializationArgs) 
+    function deployCollection(bytes32 beaconAlias, bytes calldata initializationArgs) 
         public 
         onlyOwner
         beaconIsAvailable(beaconAlias)
@@ -174,7 +175,7 @@ contract CollectionFactory is Ownable2Step {
      * @param updateArgs (encodeWithSignature) update function with arguments to be called on 
      *                   the newly update collection. If not provieded, will not call any function
      */
-    function updateCollection(address collection, string memory beaconAlias, bytes memory updateArgs) 
+    function updateCollection(address collection, bytes32 beaconAlias, bytes memory updateArgs) 
         external
         beaconIsAvailable(beaconAlias)
         collectionExists(collection)
@@ -193,12 +194,55 @@ contract CollectionFactory is Ownable2Step {
      * @param beaconAlias alias for the beacon for which to change the implementation
      * @param implementation the new implementation for the indicated beacon
      */
-    function updateBeaconImplementation(string memory beaconAlias, address implementation) 
+    function updateBeaconImplementation(bytes32 beaconAlias, address implementation) 
         external 
         onlyOwner 
         beaconIsAvailable(beaconAlias)
     {
         UpgradeableBeacon(aliasToBeacon[beaconAlias]).upgradeTo(implementation);        
+    }
+
+    function removeBeacon(bytes32 beaconAlias, address newBeaconOwner)
+        external
+        onlyOwner
+        beaconIsAvailable(beaconAlias)
+    {
+        address beacon = aliasToBeacon[beaconAlias];
+        delete aliasToBeacon[beaconAlias];
+        beaconCount -= 1;
+
+        _removeAlias(beaconAlias);
+        uint256 collectionsLength = collections.length();
+        address[] memory toBeDeletedCollections = new address[](collectionsLength);
+        uint256 toBeDeletedCollectionsCount = 0;
+        
+        for (uint256 index = 0; index < collectionsLength; index++) {
+            address collection = collections.at(index);
+            if (CollectionProxy(payable(collection)).beacon() == beacon) {
+                toBeDeletedCollections[toBeDeletedCollectionsCount++];
+            }
+        }
+        
+        for (uint256 index = 0; index < toBeDeletedCollectionsCount; index++) {
+            address collection = toBeDeletedCollections[index];
+            collections.remove(collection);
+        }
+        
+        UpgradeableBeacon(beacon).transferOwnership(address(newBeaconOwner));
+    }
+
+    function _removeAlias(bytes32 beaconAlias) internal {
+        uint256 beaconCount_ = beaconCount;
+        for (uint256 index; index < beaconCount_;) {
+            if (aliases[index] == beaconAlias) {
+                aliases[index] = beaconAlias[beaconCount_ - 1];
+                aliases.pop();
+                break;
+            }
+            unchecked {
+                ++index;
+            }
+        }
     }
 
     /** 
@@ -213,7 +257,7 @@ contract CollectionFactory is Ownable2Step {
         uint256 beaconCount_ = beaconCount;
         address [] memory beacons_ = new address[](beaconCount_);
         for (uint256 index = 0; index < beaconCount_; index++) {
-            string memory beaconAlias = aliases[index];
+            bytes32 beaconAlias = aliases[index];
             beacons_[index] = aliasToBeacon[beaconAlias];
         }
         return beacons_;
@@ -226,12 +270,12 @@ contract CollectionFactory is Ownable2Step {
     function getBeaconAliases()
         external 
         view 
-        returns (string[] memory)
+        returns (bytes32[] memory)
     {
         uint256 beaconCount_ = beaconCount;
-        string [] memory aliases_ = new string[](beaconCount_);
+        bytes32 [] memory aliases_ = new bytes32[](beaconCount_);
         for (uint256 index = 0; index < beaconCount_; index++) {
-            string memory beaconAlias = aliases[index];
+            bytes32 beaconAlias = aliases[index];
             aliases_[index] = beaconAlias;
         }
         return aliases_;
@@ -295,7 +339,7 @@ contract CollectionFactory is Ownable2Step {
      * @param beacon the beacon address to me marked
      * @param beaconAlias the beacon alias to be associated with this address
      */
-    function _saveBeacon(address beacon, string memory beaconAlias) internal {        
+    function _saveBeacon(address beacon, bytes32 beaconAlias) internal {        
         aliases.push(beaconAlias);
         aliasToBeacon[beaconAlias] = beacon;
         beaconCount += 1;
