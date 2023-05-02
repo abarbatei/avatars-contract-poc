@@ -17,26 +17,51 @@ contract DeployCollectionFactory is Script {
     }
 
     function run() public asDeployer {
+        
+        bytes32 beaconAlias = "avatarCollections";
+        address collectionOwner = 0x4BF86138e9DC66Fb65F8b9387C53aB4439FC41FF;
 
         CollectionFactory collectionFactory = new CollectionFactory();
-        Avatar simpleAvatarImplementation = new Avatar();
+        Avatar implementation = new Avatar();
 
-        console.log("Avatar implementation version 1 address:", address(simpleAvatarImplementation));
-        console.log("Avatar implementation version 1 owner address:", address(simpleAvatarImplementation.owner()));
+        console.log("Avatar implementation version 1 address:", address(implementation));
+        console.log("Avatar implementation version 1 owner address:", address(implementation.owner()));
         console.log("collectionFactory address:", address(collectionFactory));
         console.log("collectionFactoryOwner address:", address(collectionFactory.owner()));
 
+        collectionFactory.deployBeacon(address(implementation), beaconAlias);
+        
         /*
-        collectionFactory.addImplementation(address(simpleAvatarImplementation), 1);
-
-        address collectionOwner = 0x4BF86138e9DC66Fb65F8b9387C53aB4439FC41FF;
+            function initialize(
+                address _collectionOwner,
+                string memory _initialBaseURI,
+                string memory _name,
+                string memory _symbol,
+                address payable _sandOwner,
+                address _signAddress,
+                address _initialTrustedForwarder,
+                address _registry,
+                address _operatorFiltererSubscription,
+                bool _operatorFiltererSubscriptionSubscribe,
+                uint256 _maxSupply
+         */
         
         bytes memory initializationArguments = abi.encodeWithSignature(
-            "initialize(address,string,address,bool,uint256)",
-            collectionOwner, "TestName", collectionOwner, true, 1000000000000000);
-
-        collectionFactory.deployCollection(1, initializationArguments);
+            "initialize(address,string,string,string,address,address,address,address,address,bool,uint256)",
+                collectionOwner,
+                "http://google.com",
+                "AvatarTest",
+                "AT",
+                collectionOwner, // sand owner
+                collectionOwner,
+                collectionOwner,
+                collectionOwner,
+                collectionOwner, 
+                true, 
+                2500);
+        
+        collectionFactory.deployCollection(beaconAlias, initializationArguments);
         console.log("After deployCollection");
-        */
+        
     }
 }
