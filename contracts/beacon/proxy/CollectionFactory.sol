@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
+
 import { Ownable2Step } from "openzeppelin/access/Ownable2Step.sol";
 import { UpgradeableBeacon } from "openzeppelin/proxy/beacon/UpgradeableBeacon.sol";
 import { EnumerableSet } from "openzeppelin/utils/structs/EnumerableSet.sol";
-
 import { Address } from "openzeppelin/utils/Address.sol";
 import { CollectionProxy } from "./CollectionProxy.sol";
 import { IERC5313 } from "../interfaces/IERC5313.sol";
-import { EnumerableMap } from "./EnumerableMap.sol";
+
 
 contract CollectionFactory is Ownable2Step {
 
