@@ -457,11 +457,11 @@ contract CollectionFactoryTest is Test {
         
         // sanity check that there are 2 beacons
         uint256 originalBeaconCount = collectionFactory.beaconCount();
-        assertEq(originalBeaconCount, 2);
+        assertEq(originalBeaconCount, 2, "Initial beacon count assesment failed");
         
         // check that there are aliases mapped (revers if they are not)
-        assertEq(collectionFactory.aliasToBeacon(centralAlias), beacon1);
-        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2);
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), beacon1, "Initial aliasToBeacon assesment failed for beacon 1");
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2, "Initial aliasToBeacon assesment failed for beacon 2");
         
         // deploying 3 collections
         bytes memory args = _defaultArgsData();
@@ -471,7 +471,7 @@ contract CollectionFactoryTest is Test {
 
         // save original count
         uint256 originalCollectionCount = collectionFactory.collectionCount();
-        assertEq(originalCollectionCount, 3);
+        assertEq(originalCollectionCount, 3, "Initial collection count assesment failed");
         
         // see that they exist and code dosen't revert
         collectionFactory.getCollection(0);
@@ -479,26 +479,26 @@ contract CollectionFactoryTest is Test {
         collectionFactory.getCollection(2);
 
         // original beacon owner is factory
-        assertEq(UpgradeableBeacon(beacon1).owner(), address(collectionFactory));
-        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory));
+        assertEq(UpgradeableBeacon(beacon1).owner(), address(collectionFactory), "Initial beacon 1 owner assesment failed");
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory), "Initial beacon 2 owner assesment failed");
 
         // remove first beacon (2 collections)
         collectionFactory.removeBeacon(centralAlias, alice);
 
         // check variants were succesfully modified
         uint256 afterBeacon1RemovedCount = collectionFactory.beaconCount();
-        assertEq(afterBeacon1RemovedCount, 1);
-        assertEq(afterBeacon1RemovedCount, originalBeaconCount - 1);
+        assertEq(afterBeacon1RemovedCount, 1, "first remove beconCount value assement failed");
+        assertEq(afterBeacon1RemovedCount, originalBeaconCount - 1, "first remove beconCount RELATIVE value assement failed");
 
         // check that only 1 beacon was deleted, not the other
-        assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0));
-        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2);
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0), "first remove aliasToBeacon assesment failed for beacon 1");
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2, "first remove aliasToBeacon assesment failed for beacon 2");
         
         address remainingCollection = collectionFactory.getCollection(0);
         
         // see that the owner has changed
-        assertEq(UpgradeableBeacon(beacon1).owner(), address(alice));
-        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory));
+        assertEq(UpgradeableBeacon(beacon1).owner(), address(alice), "firt remove beacon 1 owner assesment failed");
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory), "first remove beacon 2 owner assesment failed");
 
         vm.expectRevert();
         collectionFactory.getCollection(1);
@@ -510,22 +510,22 @@ contract CollectionFactoryTest is Test {
 
         // check collection count after first remove
         uint256 firstRemoveCollectionCount = collectionFactory.collectionCount();
-        assertEq(firstRemoveCollectionCount, originalCollectionCount - 2);
-        assertEq(firstRemoveCollectionCount, 1);
+        assertEq(firstRemoveCollectionCount, originalCollectionCount - 2, "first remove collectionCount RELATIVE value assement failed");
+        assertEq(firstRemoveCollectionCount, 1, "first remove collectionCount value assement failed");
 
         // remove second beacon (1 collection)
         collectionFactory.removeBeacon(secondaryAlias, bob);
         uint256 lastBeaconRemovedCount = collectionFactory.beaconCount();
-        assertEq(lastBeaconRemovedCount, 0);
-        assertEq(lastBeaconRemovedCount, afterBeacon1RemovedCount - 1);
+        assertEq(lastBeaconRemovedCount, 0, "last remove beconCount value assement failed");
+        assertEq(lastBeaconRemovedCount, afterBeacon1RemovedCount - 1, "last remove beconCount RELATIVE value assement failed");
 
         // check that both beacons were deleted
-        assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0));
-        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), address(0));
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0), "last remove aliasToBeacon assesment failed for beacon 1");
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), address(0), "last remove aliasToBeacon assesment failed for beacon 2");
 
         // see that the owner has changed
-        assertEq(UpgradeableBeacon(beacon1).owner(), address(alice));
-        assertEq(UpgradeableBeacon(beacon2).owner(), address(bob));
+        assertEq(UpgradeableBeacon(beacon1).owner(), address(alice), "last remove beacon 1 owner assesment failed");
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(bob), "last remove beacon 2 owner assesment failed");
 
         vm.expectRevert();
         collectionFactory.getCollection(0);
@@ -536,14 +536,10 @@ contract CollectionFactoryTest is Test {
         vm.expectRevert();
         collectionFactory.getCollection(2);
 
-        // check collection count
-        uint256 newCollectionCount = collectionFactory.collectionCount();
-        assertEq(newCollectionCount, 0);
-
         // check collection count after second remove
         uint256 secondRemoveCollectionCount = collectionFactory.collectionCount();
-        assertEq(secondRemoveCollectionCount, firstRemoveCollectionCount - 1);
-        assertEq(secondRemoveCollectionCount, 0);
+        assertEq(secondRemoveCollectionCount, firstRemoveCollectionCount - 1, "last remove collectionCount RELATIVE value assement failed");
+        assertEq(secondRemoveCollectionCount, 0, "last remove collectionCount value assement failed");
 
         vm.stopPrank();
     }
