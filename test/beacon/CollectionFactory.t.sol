@@ -434,7 +434,8 @@ contract CollectionFactoryTest is Test {
             - can only be called by owner
             - successful removed beacon
             - input validation works
-            - respects onther invariants            
+        
+        * respects onther invariants test not needed, all variants are modified in a removeBeacon
     */
 
     function test_removeBeacon_revertsIfNotFactoryOwner() public {

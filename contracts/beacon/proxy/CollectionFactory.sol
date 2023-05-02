@@ -64,6 +64,39 @@ contract CollectionFactory is Ownable2Step {
      */
     event CollectionUpdated(address indexed proxyAddress, bytes32 indexed beaconAlias, address indexed beaconAddress);
 
+   /**
+     * @notice Event emitted when a beacon was removed from tracking
+     * @dev emitted when removeBeacon is called
+     * @param beaconAlias the alias of the removed beacon
+     * @param beaconAddress the address of the removed beacon
+     * @param newBeaconOwner the address of the new owner of the beacon
+     */
+    event BeaconRemoved(bytes32 indexed beaconAlias, address indexed beaconAddress, address indexed newBeaconOwner);
+
+   /**
+     * @notice Event emitted when a collection was removed from tracking from a beacon
+     * @dev emitted when removeBeacon is called
+     * @param beaconAlias the alias of the beacon to which the removed collection was pointing
+     * @param collectionProxy the address of the removed collection
+     */
+    event CollectionRemoved(bytes32 indexed beaconAlias, address indexed collectionProxy);
+
+    /**
+     * @notice Event emitted when the admin of this proxy was changed
+     * @dev emitted when removeBeacon is called
+     * @param oldAdmin the previous admin of the collection
+     * @param newAdmin the current admin of the collection
+     */
+    event CollectionProxyAdminChanged(address indexed oldAdmin, address indexed newAdmin);
+
+     /**
+     * @notice Event emitted when the owner of this beacon was changed
+     * @dev emitted when removeBeacon is called
+     * @param oldOwner the previous owner of the beacon
+     * @param newOwner the current owner of the beacon
+     */
+    event BeaconOwnershipChanged(address indexed oldOwner, address indexed newOwner);
+    
     /*//////////////////////////////////////////////////////////////
                                 Modifiers
     //////////////////////////////////////////////////////////////*/
@@ -102,7 +135,7 @@ contract CollectionFactory is Ownable2Step {
     /**
      * @notice deploys a beacon with the provided implementation address and tracks it
      * @dev {UpgradeableBeacon} checks that implementation is actually a contract
-     * @custom:event BeaconAdded
+     * @custom:event {BeaconAdded}
      * @param implementation the beacon address to be added/tracked
      * @param beaconAlias the beacon alias to be attributed to the newly deployed beacon
      * @return beacon the newly added beacon address that was launched
@@ -122,8 +155,8 @@ contract CollectionFactory is Ownable2Step {
      * @notice adds, an already deployed beacon, to be tracked/used by the factory;
      *         Beacon ownership must be transfered to this contract beforehand
      * @dev checks that implementation is actually a contract and not already added
-     *      will revert if beacon owner was not transfered to the factory
-     * @custom:event BeaconAdded
+     *      will revert if beacon owner was not transfered to the factory beforehand
+     * @custom:event {BeaconAdded}
      * @param beacon the beacon address to be added/tracked
      * @param beaconAlias the beacon address to be added/tracked
      */
@@ -202,6 +235,16 @@ contract CollectionFactory is Ownable2Step {
         UpgradeableBeacon(aliasToBeacon[beaconAlias]).upgradeTo(implementation);        
     }
 
+    /**
+     * @notice Removes a beacon from the factory and all linked collections. Also sets the owner to the provided one.
+     * @dev {UpgradeableBeacon.upgradeTo} checks that implementation is actually a contract
+     * @custom:event {CollectionRemoved} for each collection removed linked to the beacon
+     * @custom:event {CollectionProxyAdminChanged}
+     * @custom:event {BeaconOwnershipChanged}
+     * @custom:event {BeaconRemoved}
+     * @param beaconAlias alias for the beacon to remove
+     * @param newBeaconOwner the new owner of the beacon. It will be changed to this before removal
+     */
     function removeBeacon(bytes32 beaconAlias, address newBeaconOwner)
         external
         onlyOwner
@@ -215,27 +258,40 @@ contract CollectionFactory is Ownable2Step {
         bool success = aliases.remove(beaconAlias);
         require(success, "CollectionFactory: failed to remove alias");
 
-        uint256 collectionsLength = collections.length();
-        address[] memory toBeDeletedCollections = new address[](collectionsLength);
-        uint256 toBeDeletedCollectionsCount = 0;
-        
-        for (uint256 index = 0; index < collectionsLength; index++) {
-            address collection = collections.at(index);
-            if (CollectionProxy(payable(collection)).beacon() == beacon) {
-                toBeDeletedCollections[toBeDeletedCollectionsCount++] = collection;
-            }
-        }
-        
-        for (uint256 index = 0; index < toBeDeletedCollectionsCount; index++) {
-            address collection = toBeDeletedCollections[index];
-            success = collections.remove(collection);
-            collectionCount -= 1;
-            require(success, "CollectionFactory: failed to remove collection");
-        }
-        
-        UpgradeableBeacon(beacon).transferOwnership(address(newBeaconOwner));
-    }
+        uint256 collectionsLength = collectionCount;
+        uint256 index;
+        do {
+            CollectionProxy collection = CollectionProxy(payable(collections.at(index)));
 
+            // if this collection points to the beacon, delete it from the list. Deletion moves the last
+            // element in it's place so we won't increase index, as the last element is now at current index
+            // also the collection length is 1 element lower, so we also decrease it
+            if (collection.beacon() == beacon) {
+                success = collections.remove(address(collection));
+                require(success, "CollectionFactory: failed to remove collection");
+                --collectionsLength;
+                emit CollectionRemoved(beaconAlias, address(collection));
+                
+                collection.changeCurrentCollectionProxyAdmin(newBeaconOwner);                
+                emit CollectionProxyAdminChanged(address(this), newBeaconOwner);
+            } else {
+                // if this collection does not point to the beacon, a normal increase
+                unchecked {
+                    ++index;    
+                }
+            }
+            
+        } while (index < collectionsLength);
+        
+        // update the collection count to reflect the changes. 
+        // Could of used collections.length() but it uses more gas
+        collectionCount = collectionsLength;
+        UpgradeableBeacon(beacon).transferOwnership(address(newBeaconOwner));
+        emit BeaconOwnershipChanged(address(this), newBeaconOwner);
+        
+        emit BeaconRemoved(beaconAlias, beacon, newBeaconOwner);
+    }
+    
     /** 
      * @notice Helper function that retrieves all beacons tracked by the factory
      * @return list of beacons managed by the factory
@@ -278,7 +334,6 @@ contract CollectionFactory is Ownable2Step {
     {
         return aliases.at(index);
     }
-
 
     /** 
      * @notice Helper function that retrieves all collections tracked by the factory
@@ -335,7 +390,7 @@ contract CollectionFactory is Ownable2Step {
     /** 
      * @notice Saves the beacon address into internal tracking
      * @dev beacon address sanity checks must be done before calling this function
-     * @custom:event BeaconAdded
+     * @custom:event {BeaconAdded}
      * @param beacon the beacon address to me marked
      * @param beaconAlias the beacon alias to be associated with this address
      */
