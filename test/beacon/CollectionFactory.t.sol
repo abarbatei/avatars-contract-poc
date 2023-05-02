@@ -28,6 +28,8 @@ contract CollectionFactoryTest is Test {
     address implementation2;
     address alice;
     address bob;
+    string centralAlias = "centralAlias";
+    string secondaryAlias = "secondaryAlias";
     
     function setUp() public {
         collectionFactoryOwner = makeAddr("collectionFactoryOwner");
@@ -50,25 +52,28 @@ contract CollectionFactoryTest is Test {
     */
 
     function test_deployBeacon_revertsIfNotOwner() public {
-        
+        string memory alias_ = "centra";
+
         vm.expectRevert();
         vm.prank(alice);
-        collectionFactory.deployBeacon(implementation);
+        collectionFactory.deployBeacon(implementation, alias_);
     }
 
     function test_deployBeacon_successful() public {
         
         vm.expectRevert();
-        collectionFactory.beacons(0);
+        collectionFactory.aliases(0);
 
         vm.prank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "central";
+        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
 
         address savedImplementation = UpgradeableBeacon(deployedBeacon).implementation();
         assertEq(savedImplementation, implementation);
 
-        address savedBeacon = collectionFactory.beacons(0);
+        string memory savedAlias = collectionFactory.aliases(0);
+        assertEq(alias_, savedAlias);
+        address savedBeacon = collectionFactory.aliasToBeacon(savedAlias);
         assertEq(deployedBeacon, savedBeacon);
 
         address[] memory beacons = collectionFactory.getBeacons();
@@ -77,23 +82,27 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
 
     function test_deployBeacon_inputValidationWorks() public {
         
-        vm.expectRevert("UpgradeableBeacon: implementation is not a contract");
-        vm.prank(collectionFactoryOwner);
-        collectionFactory.deployBeacon(bob);
+        string memory alias_ = "central";
 
         vm.expectRevert("UpgradeableBeacon: implementation is not a contract");
         vm.prank(collectionFactoryOwner);
-        collectionFactory.deployBeacon(address(0x0));
+        collectionFactory.deployBeacon(bob, alias_);
+
+        vm.expectRevert("UpgradeableBeacon: implementation is not a contract");
+        vm.prank(collectionFactoryOwner);
+        collectionFactory.deployBeacon(address(0x0), alias_);
 
     }
 
     function test_deployBeacon_respectsOtherInvariants() public {
 
+        string memory alias_ = "central";
+
         vm.expectRevert();
         collectionFactory.getCollection(0);
 
         vm.prank(collectionFactoryOwner);
-        collectionFactory.deployBeacon(implementation);    
+        collectionFactory.deployBeacon(implementation, alias_);
         
         vm.expectRevert();
         collectionFactory.getCollection(0);
@@ -108,14 +117,16 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
     */
 
     function test_addBeacon_revertsIfNotOwner() public {
-        
+        string memory alias_ = "central";
         vm.expectRevert();
         vm.prank(alice);
-        collectionFactory.addBeacon(implementation);
+        collectionFactory.addBeacon(implementation, alias_);
     }
 
     function test_addBeacon_successful() public {
         
+        string memory alias_ = "secondAlias";
+
         vm.expectRevert();
         collectionFactory.getCollection(0);
 
@@ -124,10 +135,13 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
 
         UpgradeableBeacon(createdBeacon).transferOwnership(address(collectionFactory));
 
-        collectionFactory.addBeacon(createdBeacon);
+        collectionFactory.addBeacon(createdBeacon, alias_);
         vm.stopPrank();        
 
-        address savedBeacon = collectionFactory.beacons(0);
+
+        string memory savedAlias = collectionFactory.aliases(0);
+        assertEq(alias_, savedAlias);
+        address savedBeacon = collectionFactory.aliasToBeacon(savedAlias);
         assertEq(createdBeacon, savedBeacon);
 
         address[] memory beacons = collectionFactory.getBeacons();
@@ -140,16 +154,20 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         address createdBeacon = address(new UpgradeableBeacon(implementation));
         
         vm.expectRevert("CollectionFactory: beacon is not a contract");
-        collectionFactory.addBeacon(bob);
+        collectionFactory.addBeacon(bob, centralAlias);
 
         vm.expectRevert("CollectionFactory: ownership must be given to factory");
-        collectionFactory.addBeacon(createdBeacon);
+        collectionFactory.addBeacon(createdBeacon, centralAlias);
 
         UpgradeableBeacon(createdBeacon).transferOwnership(address(collectionFactory));
-        collectionFactory.addBeacon(createdBeacon);
+        
+        vm.expectRevert("CollectionFactory: beacon alias cannot be empty");
+        collectionFactory.addBeacon(createdBeacon, "");
+        
+        collectionFactory.addBeacon(createdBeacon, centralAlias);
 
         vm.expectRevert("CollectionFactory: beacon already added");
-        collectionFactory.addBeacon(createdBeacon);
+        collectionFactory.addBeacon(createdBeacon, centralAlias);
         vm.stopPrank();
     }
 
@@ -161,7 +179,7 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         vm.startPrank(collectionFactoryOwner);
         address createdBeacon = address(new UpgradeableBeacon(implementation));
         UpgradeableBeacon(createdBeacon).transferOwnership(address(collectionFactory));
-        collectionFactory.addBeacon(createdBeacon);
+        collectionFactory.addBeacon(createdBeacon, centralAlias);
         vm.stopPrank();
                 
         vm.expectRevert();
@@ -179,13 +197,13 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
     function test_deployCollection_revertsIfNotFactoryOwner() public {
         
         vm.prank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "central";
+        collectionFactory.deployBeacon(implementation, alias_);
         bytes memory args = _defaultArgsData();
 
         vm.expectRevert();
         vm.prank(alice);
-        collectionFactory.deployCollection(deployedBeacon, args);
+        collectionFactory.deployCollection(alias_, args);
     }
 
     function test_deployCollection_successful() public {
@@ -194,10 +212,10 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         collectionFactory.getCollection(0);
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
+        string memory alias_ = "central";
         address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         bytes memory args = _defaultArgsData();
-        address returnedCollection = collectionFactory.deployCollection(deployedBeacon, args);
+        address returnedCollection = collectionFactory.deployCollection(alias_, args);
         vm.stopPrank();
         
         address newlyAddedCollection = collectionFactory.getCollection(0);
@@ -214,14 +232,11 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
     function test_deployCollection_inputValidationWorks() public {
 
         vm.startPrank(collectionFactoryOwner);
-        collectionFactory.deployBeacon(implementation, 42);
+        collectionFactory.deployBeacon(implementation, "anoterOne");
         bytes memory args = _defaultArgsData();
 
         vm.expectRevert("CollectionFactory: beacon is not tracked");
-        collectionFactory.deployCollection(alice, args);
-
-        vm.expectRevert("CollectionFactory: beacon is not tracked");
-        collectionFactory.deployCollection(address(0x0), args);
+        collectionFactory.deployCollection("not_tracked", args);
 
         vm.stopPrank();
     }
@@ -229,14 +244,14 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
     function test_deployCollection_respectsOtherInvariants() public {
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "honor";
+        collectionFactory.deployBeacon(implementation, alias_);
         
         address[] memory beforeBeacons = collectionFactory.getBeacons();
         assertEq(beforeBeacons.length, 1);        
 
         bytes memory args = _defaultArgsData();
-        collectionFactory.deployCollection(deployedBeacon, args);
+        collectionFactory.deployCollection(alias_, args);
         vm.stopPrank();
 
         address[] memory afterBeacons = collectionFactory.getBeacons();
@@ -258,32 +273,32 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         bytes memory updateArgs;
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "debug";
+        collectionFactory.deployBeacon(implementation, alias_);
         bytes memory args = _defaultArgsData();
-        address returnedCollection = collectionFactory.deployCollection(deployedBeacon, args);
+        address returnedCollection = collectionFactory.deployCollection(alias_, args);
         
-        address secondBeacon = collectionFactory.deployBeacon(implementation2, 42);
+        collectionFactory.deployBeacon(implementation2, secondaryAlias);
         vm.stopPrank();
 
         vm.expectRevert();
-        collectionFactory.updateCollection(returnedCollection, secondBeacon, updateArgs);
+        collectionFactory.updateCollection(returnedCollection, secondaryAlias, updateArgs);
     }
 
     function _updateCollection_succesful_noUpdateArgs(address user) public {
         bytes memory updateArgs;
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "theAnswer";
+        collectionFactory.deployBeacon(implementation, alias_);
         bytes memory args = _defaultArgsData();
-        address returnedCollection = collectionFactory.deployCollection(deployedBeacon, args);
+        address returnedCollection = collectionFactory.deployCollection(alias_, args);
         
-        address secondBeacon = collectionFactory.deployBeacon(implementation2);
+        collectionFactory.deployBeacon(implementation2, secondaryAlias);
         vm.stopPrank();
 
         vm.startPrank(user);
-        collectionFactory.updateCollection(returnedCollection, secondBeacon, updateArgs);
+        collectionFactory.updateCollection(returnedCollection, secondaryAlias, updateArgs);
         vm.stopPrank();
     }
 
@@ -300,17 +315,17 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         bytes memory updateArgs;
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "central";
+        collectionFactory.deployBeacon(implementation, alias_);
         bytes memory args = _defaultArgsData();
-        address returnedCollection = collectionFactory.deployCollection(deployedBeacon, args);
-        address secondBeacon = collectionFactory.deployBeacon(implementation2);
+        address returnedCollection = collectionFactory.deployCollection(alias_, args);
+        collectionFactory.deployBeacon(implementation2, secondaryAlias);
 
         vm.expectRevert("CollectionFactory: beacon is not tracked");
-        collectionFactory.updateCollection(returnedCollection, bob, updateArgs);
+        collectionFactory.updateCollection(returnedCollection, "random", updateArgs);
 
         vm.expectRevert("CollectionFactory: collection is not tracked");
-        collectionFactory.updateCollection(address(0x0), secondBeacon, updateArgs);
+        collectionFactory.updateCollection(address(0x0), secondaryAlias, updateArgs);
 
         vm.stopPrank();
     }
@@ -320,21 +335,21 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         bytes memory updateArgs;
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "secondary";
+        collectionFactory.deployBeacon(implementation, alias_);
 
         bytes memory args = _defaultArgsData();
-        address returnedCollection = collectionFactory.deployCollection(deployedBeacon, args);
+        address returnedCollection = collectionFactory.deployCollection(alias_, args);
 
         address[] memory beforeCollections = collectionFactory.getCollections();
         assertEq(beforeCollections.length, 1);        
 
-        address secondBeacon = collectionFactory.deployBeacon(implementation2);
+        collectionFactory.deployBeacon(implementation2, secondaryAlias);
 
         address[] memory beforeBeacons = collectionFactory.getBeacons();
         assertEq(beforeBeacons.length, 2);
 
-        collectionFactory.updateCollection(returnedCollection, secondBeacon, updateArgs);
+        collectionFactory.updateCollection(returnedCollection, secondaryAlias, updateArgs);
         vm.stopPrank();
 
         address[] memory afterCollections = collectionFactory.getCollections();
@@ -353,28 +368,27 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
             - can not be called by random address            
             - successful update
             - input validation works
-            - respects onther invariants            
-        TODO
+            - respects onther invariants
     */
 
     function test_updateBeaconImplementation_revertsIfNotFactoryOwner() public {
         
         vm.prank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "main";
+        collectionFactory.deployBeacon(implementation, alias_);
 
         vm.expectRevert();
         vm.prank(alice);
-        collectionFactory.updateBeaconImplementation(deployedBeacon, implementation2);
+        collectionFactory.updateBeaconImplementation(secondaryAlias, implementation2);
     }
 
     function test_updateBeaconImplementation_succesful() public {
         
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
+        string memory alias_ = "central";
         address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
 
-        collectionFactory.updateBeaconImplementation(deployedBeacon, implementation2);
+        collectionFactory.updateBeaconImplementation(alias_, implementation2);
 
         address secondImplementation = UpgradeableBeacon(deployedBeacon).implementation();
 
@@ -387,7 +401,7 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         vm.startPrank(collectionFactoryOwner);
 
         vm.expectRevert("CollectionFactory: beacon is not tracked");
-        collectionFactory.updateBeaconImplementation(alice, implementation2);
+        collectionFactory.updateBeaconImplementation("random", implementation2);
 
         vm.stopPrank();
 
@@ -396,8 +410,8 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
     function test_updateBeaconImplementation_respectsOtherInvariants() public {
 
         vm.startPrank(collectionFactoryOwner);
-        uint256 alias_ = 42;
-        address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
+        string memory alias_ = "central";
+        collectionFactory.deployBeacon(implementation, alias_);
 
         address[] memory beforeCollections = collectionFactory.getCollections();
         assertEq(beforeCollections.length, 0);
@@ -405,7 +419,7 @@ address deployedBeacon = collectionFactory.deployBeacon(implementation, alias_);
         address[] memory beforeBeacons = collectionFactory.getBeacons();
         assertEq(beforeBeacons.length, 1);
 
-        collectionFactory.updateBeaconImplementation(deployedBeacon, implementation2);
+        collectionFactory.updateBeaconImplementation(alias_, implementation2);
 
         address[] memory afterCollections = collectionFactory.getCollections();
         assertEq(beforeCollections.length, afterCollections.length);
