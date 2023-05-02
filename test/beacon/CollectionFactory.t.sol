@@ -62,7 +62,7 @@ contract CollectionFactoryTest is Test {
     function test_deployBeacon_successful() public {
         
         vm.expectRevert();
-        collectionFactory.aliases(0);
+        collectionFactory.getBeaconAlias(0);
 
         vm.prank(collectionFactoryOwner);
         bytes32 alias_ = "central";
@@ -71,7 +71,7 @@ contract CollectionFactoryTest is Test {
         address savedImplementation = UpgradeableBeacon(deployedBeacon).implementation();
         assertEq(savedImplementation, implementation);
 
-        bytes32 savedAlias = collectionFactory.aliases(0);
+        bytes32 savedAlias = collectionFactory.getBeaconAlias(0);
         assertEq(alias_, savedAlias);
         address savedBeacon = collectionFactory.aliasToBeacon(savedAlias);
         assertEq(deployedBeacon, savedBeacon);
@@ -139,7 +139,7 @@ contract CollectionFactoryTest is Test {
         vm.stopPrank();        
 
 
-        bytes32 savedAlias = collectionFactory.aliases(0);
+        bytes32 savedAlias = collectionFactory.getBeaconAlias(0);
         assertEq(alias_, savedAlias);
         address savedBeacon = collectionFactory.aliasToBeacon(savedAlias);
         assertEq(createdBeacon, savedBeacon);
@@ -428,6 +428,141 @@ contract CollectionFactoryTest is Test {
         assertEq(beforeBeacons.length, afterBeacons.length);
         assertEq(beforeBeacons[0], afterBeacons[0]);
     }
+
+    /*
+        testing removeBeacon
+            - can only be called by owner
+            - successful removed beacon
+            - input validation works
+            - respects onther invariants            
+    */
+
+    function test_removeBeacon_revertsIfNotFactoryOwner() public {
+        
+        vm.prank(collectionFactoryOwner);
+        bytes32 alias_ = "main";
+        collectionFactory.deployBeacon(implementation, alias_);
+
+        vm.expectRevert();
+        vm.prank(alice);
+        collectionFactory.removeBeacon(alias_, bob);
+    }
+
+    function test_removeBeacon_succesful() public {
+        
+        vm.startPrank(collectionFactoryOwner);
+        // deploy 2 beacons
+        address beacon1 = collectionFactory.deployBeacon(implementation, centralAlias);
+        address beacon2 = collectionFactory.deployBeacon(implementation2, secondaryAlias);
+        
+        // sanity check that there are 2 beacons
+        uint256 originalBeaconCount = collectionFactory.beaconCount();
+        assertEq(originalBeaconCount, 2);
+        
+        // check that there are aliases mapped (revers if they are not)
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), beacon1);
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2);
+        
+        // deploying 3 collections
+        bytes memory args = _defaultArgsData();
+        collectionFactory.deployCollection(centralAlias, args);
+        collectionFactory.deployCollection(secondaryAlias, args);
+        collectionFactory.deployCollection(centralAlias, args);
+
+        // save original count
+        uint256 originalCollectionCount = collectionFactory.collectionCount();
+        assertEq(originalCollectionCount, 3);
+        
+        // see that they exist and code dosen't revert
+        collectionFactory.getCollection(0);
+        address secondaryCollection = collectionFactory.getCollection(1);
+        collectionFactory.getCollection(2);
+
+        // original beacon owner is factory
+        assertEq(UpgradeableBeacon(beacon1).owner(), address(collectionFactory));
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory));
+
+        // remove first beacon (2 collections)
+        collectionFactory.removeBeacon(centralAlias, alice);
+
+        // check variants were succesfully modified
+        uint256 afterBeacon1RemovedCount = collectionFactory.beaconCount();
+        assertEq(afterBeacon1RemovedCount, 1);
+        assertEq(afterBeacon1RemovedCount, originalBeaconCount - 1);
+
+        // check that only 1 beacon was deleted, not the other
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0));
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2);
+        
+        address remainingCollection = collectionFactory.getCollection(0);
+        
+        // see that the owner has changed
+        assertEq(UpgradeableBeacon(beacon1).owner(), address(alice));
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory));
+
+        vm.expectRevert();
+        collectionFactory.getCollection(1);
+        
+        vm.expectRevert();
+        collectionFactory.getCollection(2);
+
+        assertEq(secondaryCollection, remainingCollection);
+
+        // check collection count after first remove
+        uint256 firstRemoveCollectionCount = collectionFactory.collectionCount();
+        assertEq(firstRemoveCollectionCount, originalCollectionCount - 2);
+        assertEq(firstRemoveCollectionCount, 1);
+
+        // remove second beacon (1 collection)
+        collectionFactory.removeBeacon(secondaryAlias, bob);
+        uint256 lastBeaconRemovedCount = collectionFactory.beaconCount();
+        assertEq(lastBeaconRemovedCount, 0);
+        assertEq(lastBeaconRemovedCount, afterBeacon1RemovedCount - 1);
+
+        // check that both beacons were deleted
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0));
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), address(0));
+
+        // see that the owner has changed
+        assertEq(UpgradeableBeacon(beacon1).owner(), address(alice));
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(bob));
+
+        vm.expectRevert();
+        collectionFactory.getCollection(0);
+
+        vm.expectRevert();
+        collectionFactory.getCollection(1);
+        
+        vm.expectRevert();
+        collectionFactory.getCollection(2);
+
+        // check collection count
+        uint256 newCollectionCount = collectionFactory.collectionCount();
+        assertEq(newCollectionCount, 0);
+
+        // check collection count after second remove
+        uint256 secondRemoveCollectionCount = collectionFactory.collectionCount();
+        assertEq(secondRemoveCollectionCount, firstRemoveCollectionCount - 1);
+        assertEq(secondRemoveCollectionCount, 0);
+
+        vm.stopPrank();
+    }
+
+    function test_removeBeacon_inputValidationWorks() public {
+
+        vm.startPrank(collectionFactoryOwner);
+        collectionFactory.deployBeacon(implementation, centralAlias);
+                
+        vm.expectRevert("CollectionFactory: beacon is not tracked");
+        collectionFactory.removeBeacon("not", alice);
+    
+        vm.expectRevert("CollectionFactory: new owner cannot be 0 address");
+        collectionFactory.removeBeacon(centralAlias, address(0));
+
+        vm.stopPrank();
+
+    }
+
 
     /*//////////////////////////////////////////////////////////////
                             Helper functions
