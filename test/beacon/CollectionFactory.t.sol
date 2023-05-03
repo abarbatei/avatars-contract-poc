@@ -54,7 +54,7 @@ contract CollectionFactoryTest is Test {
     function test_deployBeacon_revertsIfNotOwner() public {
         bytes32 alias_ = "centra";
 
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(alice);
         collectionFactory.deployBeacon(implementation, alias_);
     }
@@ -118,7 +118,7 @@ contract CollectionFactoryTest is Test {
 
     function test_addBeacon_revertsIfNotOwner() public {
         bytes32 alias_ = "central";
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(alice);
         collectionFactory.addBeacon(implementation, alias_);
     }
@@ -201,7 +201,7 @@ contract CollectionFactoryTest is Test {
         collectionFactory.deployBeacon(implementation, alias_);
         bytes memory args = _defaultArgsData();
 
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(alice);
         collectionFactory.deployCollection(alias_, args);
     }
@@ -281,7 +281,7 @@ contract CollectionFactoryTest is Test {
         collectionFactory.deployBeacon(implementation2, secondaryAlias);
         vm.stopPrank();
 
-        vm.expectRevert();
+        vm.expectRevert("CollectionFactory: caller is not collection or factory owner");
         collectionFactory.updateCollection(returnedCollection, secondaryAlias, updateArgs);
     }
 
@@ -377,7 +377,7 @@ contract CollectionFactoryTest is Test {
         bytes32 alias_ = "main";
         collectionFactory.deployBeacon(implementation, alias_);
 
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(alice);
         collectionFactory.updateBeaconImplementation(secondaryAlias, implementation2);
     }
@@ -434,8 +434,7 @@ contract CollectionFactoryTest is Test {
             - can only be called by owner
             - successful removed beacon
             - input validation works
-        
-        * respects onther invariants test not needed, all variants are modified in a removeBeacon
+            - respects onther invariants test
     */
 
     function test_removeBeacon_revertsIfNotFactoryOwner() public {
@@ -444,8 +443,8 @@ contract CollectionFactoryTest is Test {
         bytes32 alias_ = "main";
         collectionFactory.deployBeacon(implementation, alias_);
 
-        vm.expectRevert();
         vm.prank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
         collectionFactory.removeBeacon(alias_, bob);
     }
 
@@ -476,7 +475,7 @@ contract CollectionFactoryTest is Test {
         
         // see that they exist and code dosen't revert
         collectionFactory.getCollection(0);
-        address secondaryCollection = collectionFactory.getCollection(1);
+        collectionFactory.getCollection(1);
         collectionFactory.getCollection(2);
 
         // original beacon owner is factory
@@ -495,24 +494,11 @@ contract CollectionFactoryTest is Test {
         assertEq(collectionFactory.aliasToBeacon(centralAlias), address(0), "first remove aliasToBeacon assesment failed for beacon 1");
         assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2, "first remove aliasToBeacon assesment failed for beacon 2");
         
-        address remainingCollection = collectionFactory.getCollection(0);
+        collectionFactory.getCollection(0);
         
         // see that the owner has changed
         assertEq(UpgradeableBeacon(beacon1).owner(), address(alice), "firt remove beacon 1 owner assesment failed");
         assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory), "first remove beacon 2 owner assesment failed");
-
-        vm.expectRevert();
-        collectionFactory.getCollection(1);
-        
-        vm.expectRevert();
-        collectionFactory.getCollection(2);
-
-        assertEq(secondaryCollection, remainingCollection);
-
-        // check collection count after first remove
-        uint256 firstRemoveCollectionCount = collectionFactory.collectionCount();
-        assertEq(firstRemoveCollectionCount, originalCollectionCount - 2, "first remove collectionCount RELATIVE value assement failed");
-        assertEq(firstRemoveCollectionCount, 1, "first remove collectionCount value assement failed");
 
         // remove second beacon (1 collection)
         collectionFactory.removeBeacon(secondaryAlias, bob);
@@ -527,20 +513,6 @@ contract CollectionFactoryTest is Test {
         // see that the owner has changed
         assertEq(UpgradeableBeacon(beacon1).owner(), address(alice), "last remove beacon 1 owner assesment failed");
         assertEq(UpgradeableBeacon(beacon2).owner(), address(bob), "last remove beacon 2 owner assesment failed");
-
-        vm.expectRevert();
-        collectionFactory.getCollection(0);
-
-        vm.expectRevert();
-        collectionFactory.getCollection(1);
-        
-        vm.expectRevert();
-        collectionFactory.getCollection(2);
-
-        // check collection count after second remove
-        uint256 secondRemoveCollectionCount = collectionFactory.collectionCount();
-        assertEq(secondRemoveCollectionCount, firstRemoveCollectionCount - 1, "last remove collectionCount RELATIVE value assement failed");
-        assertEq(secondRemoveCollectionCount, 0, "last remove collectionCount value assement failed");
 
         vm.stopPrank();
     }
@@ -557,9 +529,57 @@ contract CollectionFactoryTest is Test {
         collectionFactory.removeBeacon(centralAlias, address(0));
 
         vm.stopPrank();
-
     }
 
+
+    function test_removeBeacon_respectsOtherInvariants() public {
+
+        vm.startPrank(collectionFactoryOwner);
+        // deploy 2 beacons
+        address beacon1 = collectionFactory.deployBeacon(implementation, centralAlias);
+        address beacon2 = collectionFactory.deployBeacon(implementation2, secondaryAlias);
+                
+        // check that there are aliases mapped (revers if they are not)
+        assertEq(collectionFactory.aliasToBeacon(centralAlias), beacon1, "Initial aliasToBeacon assesment failed for beacon 1");
+        assertEq(collectionFactory.aliasToBeacon(secondaryAlias), beacon2, "Initial aliasToBeacon assesment failed for beacon 2");
+        
+        // deploying 3 collections
+        bytes memory args = _defaultArgsData();
+        collectionFactory.deployCollection(centralAlias, args);
+        collectionFactory.deployCollection(secondaryAlias, args);
+        collectionFactory.deployCollection(centralAlias, args);
+        
+        // save original count
+        uint256 originalCollectionCount = collectionFactory.collectionCount();
+        
+        //////////////////////////////////////////////////////////////
+        assertEq(originalCollectionCount, 3, "Initial collection count assesment failed");
+        
+        // see that they exist and code dosen't revert
+        collectionFactory.getCollection(0);
+        collectionFactory.getCollection(1);
+        collectionFactory.getCollection(2);
+
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory), "Initial beacon 2 owner assesment failed");
+
+        // remove first beacon (2 collections)
+        collectionFactory.removeBeacon(centralAlias, alice);
+
+        // see that they exist after removal and code dosen't revert
+        collectionFactory.getCollection(0);
+        collectionFactory.getCollection(1);
+        collectionFactory.getCollection(2);
+
+        // check collection count after remove
+        uint256 firstRemoveCollectionCount = collectionFactory.collectionCount();
+        assertEq(firstRemoveCollectionCount, originalCollectionCount, "remove collectionCount RELATIVE value assement failed");
+        assertEq(firstRemoveCollectionCount, 3, "remove collectionCount value assement failed");
+
+        // see that the owner has changed
+        assertEq(UpgradeableBeacon(beacon2).owner(), address(collectionFactory), "last remove beacon 2 owner assesment failed");
+        
+        vm.stopPrank();
+    }
 
     /*//////////////////////////////////////////////////////////////
                             Helper functions
